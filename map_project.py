@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import base64
+import os
 
 # 1. PAGE SETUP
 st.set_page_config(
@@ -9,27 +10,22 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. FUNCTION: LOAD LOCAL BACKGROUND IMAGE
+# 2. FUNCTION: LOAD BACKGROUND (Cloud-Compatible)
 def set_bg_local(main_bg):
-    try:
+    if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
             bin_str = base64.b64encode(f.read()).decode()
         st.markdown(
             f"""
             <style>
-            /* Main App Background */
             .stApp {{
                 background-image: url("data:image/png;base64,{bin_str}");
                 background-size: cover;
                 background-attachment: fixed;
             }}
-            
-            /* Sky Blue Sidebar Styling */
             [data-testid="stSidebar"] {{
                 background-color: #87CEEB !important;
             }}
-            
-            /* Glassmorphism container for main content readability */
             .main .block-container {{
                 background-color: rgba(255, 255, 255, 0.93);
                 padding: 3rem;
@@ -37,32 +33,21 @@ def set_bg_local(main_bg):
                 margin-top: 30px;
                 box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
             }}
-            
-            /* Sidebar Text Color */
-            [data-testid="stSidebar"] .stMarkdown {{
-                color: #003366;
-            }}
             </style>
             """,
             unsafe_allow_html=True
         )
-    except FileNotFoundError:
-        st.warning("⚠️ background.jpg not found on Desktop.")
-
-# Apply background and styles
-set_bg_local('background.jpg')
 
 # 3. SIDEBAR: LOGO AND PARAMETERS
-try:
+# This looks for utm.png in the same GitHub folder
+if os.path.exists("utm.png"):
     st.sidebar.image("utm.png", use_container_width=True)
-except:
-    st.sidebar.header("📍 UTM GEOMATICS")
+else:
+    st.sidebar.title("📍 UTM GEOMATICS")
 
 st.sidebar.divider()
 st.sidebar.header("⚙️ Timbalai 1948 Parameters")
-st.sidebar.write("Input the 7-Parameters for Sabah/Sarawak:")
 
-# Default Timbalai 1948 parameters (Common values)
 tx = st.sidebar.number_input("Translation dX (m)", value=-679.0)
 ty = st.sidebar.number_input("Translation dY (m)", value=669.0)
 tz = st.sidebar.number_input("Translation dZ (m)", value=-48.0)
@@ -86,10 +71,11 @@ def geodetic_to_cartesian(lat, lon, h):
     return X, Y, Z
 
 # 5. MAIN CONTENT
+# This looks for background.jpg in the same GitHub folder
+set_bg_local('background.jpg')
+
 st.title("🛰️ Coordinate Transformation Innovation")
 st.markdown("### Geomatics Creative Map and Innovation Competition 2026")
-
-# DARKENED TARGET TEXT FOR BETTER VISIBILITY
 st.markdown("<h4 style='color: #002147; font-weight: bold;'>Target: WGS84 Geodetic to Timbalai 1948 Cartesian</h4>", unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
@@ -112,8 +98,7 @@ with col1:
             rz = np.radians(rz_s / 3600)
             
             R = np.array([[1, rz, -ry], [-rz, 1, rx], [ry, -rx, 1]])
-            P_wgs = np.array([xw, yw, zw])
-            P_out = T + (1 + s_fact) * np.dot(R, P_wgs)
+            P_out = T + (1 + s_fact) * np.dot(R, np.array([xw, yw, zw]))
             
             st.success("Transformation Complete!")
             st.metric("Timbalai X", f"{P_out[0]:.3f} m")
@@ -121,8 +106,8 @@ with col1:
             st.metric("Timbalai Z", f"{P_out[2]:.3f} m")
             st.balloons()
 
-# 6. DOCUMENTATION
+# 6. THEORY SECTION
 st.divider()
 with st.expander("📖 View Mathematical Methodology"):
-    st.write("This module performs a transformation between ellipsoids using the **Helmert 7-Parameter Model**.")
+    st.write("Calculated using the Helmert 7-Parameter Model for datum shifts.")
     st.latex(r'''X_{Local} = T + (1 + S) \cdot R \cdot X_{WGS84}''')
