@@ -1,7 +1,5 @@
-streamlit
-
 numpy
-streamlit
-numpy
+pandas
 folium
 streamlit-folium
+openpyxl
