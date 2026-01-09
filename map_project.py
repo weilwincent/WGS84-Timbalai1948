@@ -32,8 +32,8 @@ if 'results' not in st.session_state:
 if 'balloons_fired' not in st.session_state:
     st.session_state.balloons_fired = False
 
-# 4. MATH ENGINE: FULL DATUM TRANSFORMATION (BURSA-WOLF + REVERSE GEODETIC)
-def full_transformation(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
+# 4. MATH ENGINE: HORIZONTAL TRANSFORMATION
+def horizontal_transformation(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
     # WGS84 Constants
     a_w, f_w = 6378137.0, 1/298.257223563
     e2_w = (2*f_w) - (f_w**2)
@@ -45,7 +45,7 @@ def full_transformation(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
     Yw = (N_w + h) * np.cos(phi) * np.sin(lam)
     Zw = (N_w * (1 - e2_w) + h) * np.sin(phi)
     
-    # 2. Bursa-Wolf 7-Parameter Shift
+    # 2. Bursa-Wolf 7-Parameter Shift (Math from your uploaded file)
     T = np.array([dx, dy, dz])
     S = 1 + (s_ppm / 1000000)
     rx, ry, rz = np.radians(rx_s/3600), np.radians(ry_s/3600), np.radians(rz_s/3600)
@@ -53,7 +53,6 @@ def full_transformation(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
     P_tim_cart = T + S * (R @ np.array([Xw, Yw, Zw]))
     
     # 3. Cartesian to Timbalai Geodetic (Everest 1830 Ellipsoid)
-    # Everest 1830 Parameters
     a_e, f_e = 6377298.556, 1/300.8017
     e2_e = (2*f_e) - (f_e**2)
     
@@ -62,13 +61,13 @@ def full_transformation(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
     p = np.sqrt(x**2 + y**2)
     phi_tim = np.arctan2(z, p * (1 - e2_e))
     
-    # Iterative calculation for high precision latitude
+    # Iteration for Lat
     for _ in range(5):
         N_e = a_e / np.sqrt(1 - e2_e * np.sin(phi_tim)**2)
         phi_tim = np.arctan2(z + e2_e * N_e * np.sin(phi_tim), p)
     
-    h_tim = p / np.cos(phi_tim) - N_e
-    return np.degrees(phi_tim), np.degrees(lon_tim), h_tim
+    # Note: We return input h as requested
+    return np.degrees(phi_tim), np.degrees(lon_tim)
 
 # 5. SIDEBAR
 if os.path.exists("utm.png"):
@@ -85,54 +84,10 @@ scale_p = st.sidebar.number_input("Scale (ppm)", value=-10.454, format="%.6f")
 
 # 6. MAIN UI
 st.title("🛰️ Geodetic Datum Transformation")
-st.write("WGS84 to Timbalai 1948 (Lat/Long Output)")
+st.write("Horizontal Shift (Height maintained from Input)")
 
 col_in, col_out = st.columns(2)
 with col_in:
     st.subheader("📥 Input: WGS84")
     lat_in = st.number_input("Latitude", value=5.573408816, format="%.9f")
-    lon_in = st.number_input("Longitude", value=116.035751582, format="%.9f")
-    h_in = st.number_input("Height (m)", value=48.502, format="%.3f")
-    
-    if st.button("🚀 Transform to Timbalai"):
-        st.session_state.balloons_fired = False 
-        lat_t, lon_t, h_t = full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
-        st.session_state.results = {"lat_t": lat_t, "lon_t": lon_t, "h_t": h_t, "lat_orig": lat_in, "lon_orig": lon_in}
-
-with col_out:
-    if st.session_state.results:
-        st.subheader("📤 Output: Timbalai 1948")
-        st.metric("Latitude", f"{st.session_state.results['lat_t']:.9f}°")
-        st.metric("Longitude", f"{st.session_state.results['lon_t']:.9f}°")
-        st.metric("Height (m)", f"{st.session_state.results['h_t']:.3f}")
-        
-        if not st.session_state.balloons_fired:
-            st.balloons()
-            st.session_state.balloons_fired = True
-
-# 7. MATHEMATICAL FORMULAS
-st.divider()
-st.subheader("📖 Mathematical Principles")
-with st.expander("View Reverse Geodetic Formula", expanded=True):
-    st.write("To convert Cartesian back to Latitude ($\phi$), we use the iterative Bowring's method:")
-    st.latex(r"\phi_{i+1} = \arctan \left( \frac{Z + e^2 N_i \sin \phi_i}{p} \right)")
-    st.write("Where $p = \sqrt{X^2 + Y^2}$ and $N$ is the radius of curvature.")
-
-# 8. MAP ROW
-if st.session_state.results:
-    st.divider()
-    st.subheader("🗺️ Visual Verification")
-    m = folium.Map(location=[st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], zoom_start=15)
-    folium.Marker([st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], popup="Survey Point").add_to(m)
-    st_folium(m, use_container_width=True, height=400)
-
-# 9. FOOTER
-st.markdown("""
-    <div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; 
-    background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; 
-    border-radius: 8px; z-index: 1000;">
-        <p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p>
-        <p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p>
-        <p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p>
-    </div>
-    """, unsafe_allow_html=True)
+    lon_in = st.number
