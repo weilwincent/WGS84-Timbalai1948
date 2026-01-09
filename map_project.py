@@ -4,7 +4,7 @@ import base64
 import os
 
 # 1. PAGE SETUP
-st.set_page_config(page_title="7-Parameter Module", page_icon="📍", layout="wide")
+st.set_page_config(page_title="7-Parameter Transformation Module", page_icon="📍", layout="wide")
 
 # 2. CUSTOM STYLING (Midnight Blue Sidebar + Glass Effect)
 def set_bg_local(main_bg):
@@ -132,3 +132,4 @@ st.markdown(
     """, unsafe_allow_html=True
 
 )
+
