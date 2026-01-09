@@ -6,9 +6,9 @@ import base64
 import os
 
 # 1. PAGE SETUP
-st.set_page_config(page_title="SBEU 3893 - Geomatics Transformation", page_icon="📍", layout="wide")
+st.set_page_config(page_title="SBEU 3893 - Geomatics Module", page_icon="📍", layout="wide")
 
-# 2. CUSTOM STYLING (Original Steel Blue Theme)
+# 2. CUSTOM STYLING (Original Steel Blue)
 def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
@@ -32,25 +32,45 @@ if 'results' not in st.session_state:
 if 'balloons_fired' not in st.session_state:
     st.session_state.balloons_fired = False
 
-# 4. MATH ENGINE: BURSA-WOLF 7-PARAMETER
-def bursa_wolf_transform(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
-    a_w, f_inv_w = 6378137.0, 298.257223563
-    f_w = 1/f_inv_w
-    e2w = (2*f_w) - (f_w**2)
+# 4. MATH ENGINE: FULL DATUM TRANSFORMATION (BURSA-WOLF + REVERSE GEODETIC)
+def full_transformation(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
+    # WGS84 Constants
+    a_w, f_w = 6378137.0, 1/298.257223563
+    e2_w = (2*f_w) - (f_w**2)
+    
+    # 1. WGS84 Geodetic to Cartesian
     phi, lam = np.radians(lat), np.radians(lon)
-    N = a_w / np.sqrt(1 - e2w * np.sin(phi)**2)
-    Xw = (N + h) * np.cos(phi) * np.cos(lam)
-    Yw = (N + h) * np.cos(phi) * np.sin(lam)
-    Zw = (N * (1 - e2w) + h) * np.sin(phi)
-    P_wgs = np.array([Xw, Yw, Zw])
+    N_w = a_w / np.sqrt(1 - e2_w * np.sin(phi)**2)
+    Xw = (N_w + h) * np.cos(phi) * np.cos(lam)
+    Yw = (N_w + h) * np.cos(phi) * np.sin(lam)
+    Zw = (N_w * (1 - e2_w) + h) * np.sin(phi)
+    
+    # 2. Bursa-Wolf 7-Parameter Shift
     T = np.array([dx, dy, dz])
     S = 1 + (s_ppm / 1000000)
     rx, ry, rz = np.radians(rx_s/3600), np.radians(ry_s/3600), np.radians(rz_s/3600)
     R = np.array([[1, rz, -ry], [-rz, 1, rx], [ry, -rx, 1]])
-    P_local = T + S * (R @ P_wgs)
-    return P_local
+    P_tim_cart = T + S * (R @ np.array([Xw, Yw, Zw]))
+    
+    # 3. Cartesian to Timbalai Geodetic (Everest 1830 Ellipsoid)
+    # Everest 1830 Parameters
+    a_e, f_e = 6377298.556, 1/300.8017
+    e2_e = (2*f_e) - (f_e**2)
+    
+    x, y, z = P_tim_cart
+    lon_tim = np.arctan2(y, x)
+    p = np.sqrt(x**2 + y**2)
+    phi_tim = np.arctan2(z, p * (1 - e2_e))
+    
+    # Iterative calculation for high precision latitude
+    for _ in range(5):
+        N_e = a_e / np.sqrt(1 - e2_e * np.sin(phi_tim)**2)
+        phi_tim = np.arctan2(z + e2_e * N_e * np.sin(phi_tim), p)
+    
+    h_tim = p / np.cos(phi_tim) - N_e
+    return np.degrees(phi_tim), np.degrees(lon_tim), h_tim
 
-# 5. SIDEBAR (Linking your local utm.png)
+# 5. SIDEBAR
 if os.path.exists("utm.png"):
     st.sidebar.image("utm.png", use_container_width=True)
 
@@ -64,7 +84,8 @@ rz_s = st.sidebar.number_input("rZ (arc-sec)", value=1.828440, format="%.6f")
 scale_p = st.sidebar.number_input("Scale (ppm)", value=-10.454, format="%.6f")
 
 # 6. MAIN UI
-st.title("🛰️ 7-Parameter Transformation Module")
+st.title("🛰️ Geodetic Datum Transformation")
+st.write("WGS84 to Timbalai 1948 (Lat/Long Output)")
 
 col_in, col_out = st.columns(2)
 with col_in:
@@ -73,46 +94,37 @@ with col_in:
     lon_in = st.number_input("Longitude", value=116.035751582, format="%.9f")
     h_in = st.number_input("Height (m)", value=48.502, format="%.3f")
     
-    if st.button("🚀 Transform Point"):
+    if st.button("🚀 Transform to Timbalai"):
         st.session_state.balloons_fired = False 
-        P_tim = bursa_wolf_transform(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
-        st.session_state.results = {"X": P_tim[0], "Y": P_tim[1], "Z": P_tim[2], "lat": lat_in, "lon": lon_in}
+        lat_t, lon_t, h_t = full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
+        st.session_state.results = {"lat_t": lat_t, "lon_t": lon_t, "h_t": h_t, "lat_orig": lat_in, "lon_orig": lon_in}
 
 with col_out:
     if st.session_state.results:
         st.subheader("📤 Output: Timbalai 1948")
-        st.metric("Timbalai X (m)", f"{st.session_state.results['X']:.3f}")
-        st.metric("Timbalai Y (m)", f"{st.session_state.results['Y']:.3f}")
-        st.metric("Timbalai Z (m)", f"{st.session_state.results['Z']:.3f}")
+        st.metric("Latitude", f"{st.session_state.results['lat_t']:.9f}°")
+        st.metric("Longitude", f"{st.session_state.results['lon_t']:.9f}°")
+        st.metric("Height (m)", f"{st.session_state.results['h_t']:.3f}")
         
         if not st.session_state.balloons_fired:
             st.balloons()
             st.session_state.balloons_fired = True
 
-# 7. MATHEMATICAL FORMULA SECTION
+# 7. MATHEMATICAL FORMULAS
 st.divider()
 st.subheader("📖 Mathematical Principles")
-with st.expander("View Transformation Formulas", expanded=True):
-    st.markdown("### 1. Geodetic to Cartesian Conversion")
-    
-    st.latex(r"X = (N + h) \cos \phi \cos \lambda")
-    st.latex(r"Y = (N + h) \cos \phi \sin \lambda")
-    st.latex(r"Z = [N(1 - e^2) + h] \sin \phi")
-    
-    st.divider()
-    st.markdown("### 2. Bursa-Wolf 7-Parameter Model")
-    
-    st.latex(r"\mathbf{X}_{Local} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
-    st.write("Where $\mathbf{R}$ is the rotation matrix:")
-    st.latex(r'''R = \begin{bmatrix} 1 & r_z & -r_y \\ -r_z & 1 & r_x \\ r_y & -r_x & 1 \end{bmatrix}''')
+with st.expander("View Reverse Geodetic Formula", expanded=True):
+    st.write("To convert Cartesian back to Latitude ($\phi$), we use the iterative Bowring's method:")
+    st.latex(r"\phi_{i+1} = \arctan \left( \frac{Z + e^2 N_i \sin \phi_i}{p} \right)")
+    st.write("Where $p = \sqrt{X^2 + Y^2}$ and $N$ is the radius of curvature.")
 
 # 8. MAP ROW
 if st.session_state.results:
     st.divider()
     st.subheader("🗺️ Visual Verification")
-    m = folium.Map(location=[st.session_state.results['lat'], st.session_state.results['lon']], zoom_start=15)
-    folium.Marker([st.session_state.results['lat'], st.session_state.results['lon']], popup="Survey Point").add_to(m)
-    st_folium(m, use_container_width=True, height=400, key="borneo_map")
+    m = folium.Map(location=[st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], zoom_start=15)
+    folium.Marker([st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], popup="Survey Point").add_to(m)
+    st_folium(m, use_container_width=True, height=400)
 
 # 9. FOOTER
 st.markdown("""
