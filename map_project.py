@@ -94,9 +94,9 @@ st.markdown("<h4 style='color: #4682B4; font-weight: bold;'>Method: Bursa-Wolf 7
 col1, col2 = st.columns(2)
 with col1:
     st.subheader("📥 Input: WGS84 (Lat,Long)")
-    lat = st.number_input("Latitude", value=5.0, format="%.8f")
-    lon = st.number_input("Longitude", value=115.0, format="%.8f")
-    h = st.number_input("Height (m)", value=0.0)
+    lat = st.number_input("Latitude", value=5.573408816, format="%.8f")
+    lon = st.number_input("Longitude", value=116.035751582, format="%.8f")
+    h = st.number_input("Height (m)", value=48.502)
     
     if st.button("🚀 Transform (7-Parameter)"):
         with col2:
@@ -149,6 +149,7 @@ st.markdown(
     """, unsafe_allow_html=True
 
 )
+
 
 
 
