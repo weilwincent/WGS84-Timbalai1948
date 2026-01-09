@@ -143,12 +143,13 @@ st.markdown(
         <p class="footer-text">Rebecca J.</p>
         <p class="footer-text">Achellis L.</p>
         <p class="footer-text">Nor Muhamad</p>
-        <p class="footer-text">Rowell B.S</p>
+        <p class="footer-text">Rowell B.S.</p>
         <p class="footer-text" style="margin-top:5px; color: #800000;"><b>SBEU 3893</b></p>
     </div>
     """, unsafe_allow_html=True
 
 )
+
 
 
 
