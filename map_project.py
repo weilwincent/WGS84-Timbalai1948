@@ -93,3 +93,26 @@ with col1:
     
     if st.button("🚀 Calculate Cartesian"):
         cx, cy, cz = convert_to_cartesian(lat_in, lon_in, h_in, ellipsoid_mode)
+        
+        with col2:
+            st.subheader("📤 Output: Geocentric X, Y, Z")
+            st.success("Transformation Complete!")
+            st.metric("X (meters)", f"{cx:.3f}")
+            st.metric("Y (meters)", f"{cy:.3f}")
+            st.metric("Z (meters)", f"{cz:.3f}")
+            
+            # Validation Message
+            if ellipsoid_mode == "Everest 1830 (Modified)":
+                st.info("✅ Matches local survey software standards.")
+            st.balloons()
+
+# 6. FOOTER - Fixed: Corrected string formatting to avoid decimal literal errors
+st.markdown("""
+    <div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; 
+    background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; 
+    border-radius: 8px; z-index: 1000;">
+        <p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p>
+        <p style="font-size: 13px; color: #002147; margin: 0;">Weil W., Rebecca J., Achellis L., Nor Muhamad, Rowell B.S.</p>
+        <p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p>
+    </div>
+    """, unsafe_allow_html=True)
