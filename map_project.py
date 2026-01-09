@@ -4,7 +4,7 @@ import base64
 import os
 
 # 1. PAGE SETUP
-st.set_page_config(page_title="7-Parameter Bursa-Wolf Module", page_icon="📍", layout="wide")
+st.set_page_config(page_title="7-Parameter Module", page_icon="📍", layout="wide")
 
 # 2. CUSTOM STYLING (Midnight Blue Sidebar + Glass Effect)
 def set_bg_local(main_bg):
@@ -130,4 +130,5 @@ st.markdown(
         <p class="footer-text" style="margin-top:5px; color: #800000;"><b>SBEU 3893</b></p>
     </div>
     """, unsafe_allow_html=True
+
 )
