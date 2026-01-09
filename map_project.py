@@ -6,9 +6,9 @@ import base64
 import os
 
 # 1. PAGE SETUP
-st.set_page_config(page_title="SBEU 3893 - Molodensky Module", page_icon="📍", layout="wide")
+st.set_page_config(page_title="SBEU 3893 - Molodensky DMS Module", page_icon="📍", layout="wide")
 
-# 2. CUSTOM STYLING (Original Steel Blue)
+# 2. CUSTOM STYLING (Steel Blue Theme)
 def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
@@ -26,102 +26,105 @@ def set_bg_local(main_bg):
 if os.path.exists('background.jpg'):
     set_bg_local('background.jpg')
 
-# 3. INITIALIZE SESSION STATE
+# 3. HELPER FUNCTION: DECIMAL TO DMS
+def decimal_to_dms(deg, is_lat=True):
+    abs_deg = abs(deg)
+    d = int(abs_deg)
+    m = int((abs_deg - d) * 60)
+    s = (abs_deg - d - m/60) * 3600
+    
+    if is_lat:
+        direction = "N" if deg >= 0 else "S"
+    else:
+        direction = "E" if deg >= 0 else "W"
+        
+    return f"{d}° {m}' {s:.4f}\" {direction}"
+
+# 4. MATH ENGINE: SIMPLE MOLODENSKY
+def simple_molodensky_horizontal(lat, lon, h, dx, dy, dz):
+    # WGS84 (Source) to Everest 1830 (Target)
+    a, f = 6378137.0, 1/298.257223563
+    a_t, f_t = 6377298.556, 1/300.8017
+    
+    da, df = a_t - a, f_t - f
+    phi, lam = np.radians(lat), np.radians(lon)
+    e2 = 2*f - f**2
+    
+    M = a * (1 - e2) / (1 - e2 * np.sin(phi)**2)**1.5
+    N = a / np.sqrt(1 - e2 * np.sin(phi)**2)
+    
+    dphi = (-dx * np.sin(phi) * np.cos(lam) - dy * np.sin(phi) * np.sin(lam) + dz * np.cos(phi) + 
+            (a * df + f * da) * np.sin(2*phi)) / (M + h)
+    dlam = (-dx * np.sin(lam) + dy * np.cos(lam)) / ((N + h) * np.cos(phi))
+    
+    return lat + np.degrees(dphi), lon + np.degrees(dlam)
+
+# 5. INITIALIZE SESSION STATE
 if 'results' not in st.session_state:
     st.session_state.results = None
 if 'balloons_fired' not in st.session_state:
     st.session_state.balloons_fired = False
 
-# 4. MATH ENGINE: SIMPLE MOLODENSKY
-def simple_molodensky_horizontal(lat, lon, h, dx, dy, dz):
-    # WGS84 (Source Ellipsoid)
-    a = 6378137.0
-    f = 1 / 298.257223563
-    # Everest 1830 (Target Ellipsoid for Timbalai)
-    a_t = 6377298.556
-    f_t = 1 / 300.8017
-    
-    da = a_t - a
-    df = f_t - f
-    
-    phi = np.radians(lat)
-    lam = np.radians(lon)
-    
-    e2 = 2*f - f**2
-    sin_phi = np.sin(phi)
-    cos_phi = np.cos(phi)
-    sin_lam = np.sin(lam)
-    cos_lam = np.cos(lam)
-    
-    M = a * (1 - e2) / (1 - e2 * sin_phi**2)**1.5
-    N = a / np.sqrt(1 - e2 * sin_phi**2)
-    
-    # Delta Latitude (radians)
-    dphi = (-dx * sin_phi * cos_lam - dy * sin_phi * sin_lam + dz * cos_phi + 
-            (a * df + f * da) * np.sin(2*phi)) / (M + h)
-            
-    # Delta Longitude (radians)
-    dlam = (-dx * sin_lam + dy * cos_lam) / ((N + h) * cos_phi)
-    
-    return lat + np.degrees(dphi), lon + np.degrees(dlam)
-
-# 5. SIDEBAR
+# 6. SIDEBAR
 if os.path.exists("utm.png"):
     st.sidebar.image("utm.png", use_container_width=True)
-
-st.sidebar.title("⚙️ Molodensky Params")
-st.sidebar.info("3-Parameter Shift (dX, dY, dZ)")
 dx = st.sidebar.number_input("dX (m)", value=596.096, format="%.3f")
 dy = st.sidebar.number_input("dY (m)", value=-624.512, format="%.3f")
 dz = st.sidebar.number_input("dZ (m)", value=2.779, format="%.3f")
 
-# 6. MAIN UI
-st.title("🛰️ Simple Molodensky Transformation")
-st.write("Horizontal Shift (Height Maintained from Input)")
+# 7. MAIN UI
+st.title("🛰️ Molodensky Transformation (DMS Output)")
+st.write("Horizontal Shift with Professional DMS Formatting")
 
 col_in, col_out = st.columns(2)
 with col_in:
     st.subheader("📥 Input: WGS84")
-    lat_in = st.number_input("Latitude", value=5.573408816, format="%.9f")
-    lon_in = st.number_input("Longitude", value=116.035751582, format="%.9f")
+    lat_in = st.number_input("Latitude (Decimal)", value=5.573408816, format="%.9f")
+    lon_in = st.number_input("Longitude (Decimal)", value=116.035751582, format="%.9f")
     h_in = st.number_input("Height (m)", value=48.502, format="%.3f")
     
-    if st.button("🚀 Transform Point"):
+    if st.button("🚀 Transform"):
         st.session_state.balloons_fired = False 
         lat_t, lon_t = simple_molodensky_horizontal(lat_in, lon_in, h_in, dx, dy, dz)
-        # Results stored with preserved height
-        st.session_state.results = {"lat_t": lat_t, "lon_t": lon_t, "h_t": h_in, "lat_orig": lat_in, "lon_orig": lon_in}
+        st.session_state.results = {
+            "lat_dms": decimal_to_dms(lat_t, True),
+            "lon_dms": decimal_to_dms(lon_t, False),
+            "h_t": h_in,
+            "lat_orig": lat_in,
+            "lon_orig": lon_in
+        }
 
 with col_out:
     if st.session_state.results:
         st.subheader("📤 Output: Timbalai 1948")
-        st.metric("Latitude", f"{st.session_state.results['lat_t']:.9f}°")
-        st.metric("Longitude", f"{st.session_state.results['lon_t']:.9f}°")
-        st.metric("Height (m)", f"{st.session_state.results['h_t']:.3f} (Preserved)")
+        st.info(f"**Latitude:** {st.session_state.results['lat_dms']}")
+        st.info(f"**Longitude:** {st.session_state.results['lon_dms']}")
+        st.metric("Height (m)", f"{st.session_state.results['h_t']:.3f}")
         
         if not st.session_state.balloons_fired:
             st.balloons()
             st.session_state.balloons_fired = True
 
-# 7. MATHEMATICAL FORMULA SECTION
+# 8. MATHEMATICAL PRINCIPLES
 st.divider()
 st.subheader("📖 Mathematical Principles")
+[Image of geodetic datum shift using Molodensky transformation]
+with st.expander("View Conversion Logic", expanded=True):
+    st.write("The output is converted from decimal degrees to DMS using:")
+    st.latex(r"Degrees = \lfloor Decimal \rfloor")
+    st.latex(r"Minutes = \lfloor (Decimal - Degrees) \times 60 \rfloor")
+    st.latex(r"Seconds = (Decimal - Degrees - \frac{Minutes}{60}) \times 3600")
 
-with st.expander("View Molodensky Equations", expanded=True):
-    st.write("The Simple Molodensky equations adjust curvilinear coordinates using the ellipsoid parameters differences ($\Delta a$ and $\Delta f$):")
-    st.latex(r"\Delta \phi = \frac{-dx \sin \phi \cos \lambda - dy \sin \phi \sin \lambda + dz \cos \phi + (a \Delta f + f \Delta a) \sin 2\phi}{M+h}")
-    st.latex(r"\Delta \lambda = \frac{-dx \sin \lambda + dy \cos \lambda}{(N+h) \cos \phi}")
-    st.write("Height is maintained as a constant ($h_{out} = h_{in}$) as per user configuration.")
-
-# 8. MAP ROW
+# 9. MAP ROW
 if st.session_state.results:
     st.divider()
     st.subheader("🗺️ Visual Verification")
     m = folium.Map(location=[st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], zoom_start=15)
-    folium.Marker([st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], popup="Survey Point").add_to(m)
-    st_folium(m, use_container_width=True, height=400, key="borneo_map")
+    folium.Marker([st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], 
+                  popup=f"DMS: {st.session_state.results['lat_dms']}").add_to(m)
+    st_folium(m, use_container_width=True, height=400)
 
-# 9. FOOTER
+# 10. FOOTER
 st.markdown("""
     <div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; 
     background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; 
