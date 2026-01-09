@@ -31,15 +31,15 @@ dx = st.sidebar.number_input("dX (m)", value=-679.0, format="%.3f")
 dy = st.sidebar.number_input("dY (m)", value=669.0, format="%.3f")
 dz = st.sidebar.number_input("dZ (m)", value=-48.0, format="%.3f")
 
-# 4. MATH LOGIC: HOTINE OBLIQUE MERCATOR (HOM)
-def latlon_to_hom(lat, lon):
+# 4. MATH LOGIC: HOTINE OBLIQUE MERCATOR
+def latlon_to_hom_final(lat, lon):
     # Everest 1830 (Modified)
     a = 6377298.556
     f = 1 / 300.8017
     e2 = 2*f - f**2
     e = np.sqrt(e2)
     
-    # Your Parameters
+    # Parameters provided by user
     lat0 = np.radians(4.0)
     lon0 = np.radians(115.0)
     k0 = 0.99984
@@ -49,15 +49,18 @@ def latlon_to_hom(lat, lon):
     phi = np.radians(lat)
     lam = np.radians(lon)
     
-    # 1. Calculate Constants
+    # Step 1: Constants
     B = np.sqrt(1 + (e2 * np.cos(lat0)**4) / (1 - e2))
-    A = a * B * k0 * np.sqrt(1 - e2) / (1 - e2 * np.sin(lat0)**2)
+    A = (a * B * k0 * np.sqrt(1 - e2)) / (1 - e2 * np.sin(lat0)**2)
     t0 = np.tan(np.pi/4 - lat0/2) / ((1 - e*np.sin(lat0)) / (1 + e*np.sin(lat0)))**(e/2)
     D = B * np.sqrt(1 - e2) / (np.cos(lat0) * np.sqrt(1 - e2 * np.sin(lat0)**2))
-    F = D + np.sqrt(max(0, D**2 - 1))
+    
+    # Check for D < 1 to prevent NaN
+    D2_1 = D**2 - 1
+    F = D + np.sqrt(max(0, D2_1))
     E = F * (t0**B)
     
-    # 2. Transformation to Sphere
+    # Step 2: Spherical transformation
     t = np.tan(np.pi/4 - phi/2) / ((1 - e*np.sin(phi)) / (1 + e*np.sin(phi)))**(e/2)
     Q = E / (t**B)
     S = (Q - 1/Q) / 2
@@ -65,17 +68,19 @@ def latlon_to_hom(lat, lon):
     V = np.sin(B * (lam - lon0))
     U = (S * np.sin(alpha_c) - V * np.cos(alpha_c)) / T
     
-    # 3. Rectified Coordinates (u, v)
-    # v is perpendicular to the center line, u is along the center line
+    # Step 3: Rectified Coordinates (v, u)
+    # v is the distance from the initial line
     v = (A / (2 * B)) * np.log((1 - U) / (1 + U))
+    # u is the distance along the initial line
     u = (A / B) * np.arctan2((S * np.cos(alpha_c) + V * np.sin(alpha_c)), 1.0)
     
-    # 4. Final Rotation (Rectified to Grid)
-    # This is where Easting (E) and Northing (N) are generated
-    easting = v * np.cos(gamma_c) + u * np.sin(gamma_c)
-    northing = u * np.cos(gamma_c) - v * np.sin(gamma_c)
+    # Step 4: Rotation using the Rectified to Grid Angle (gamma_c)
+    # IMPORTANT: Many massive errors come from swapping u and v here.
+    # In HOM, u is the 'rectified northing' and v is the 'rectified easting'
+    Easting = v * np.cos(gamma_c) + u * np.sin(gamma_c)
+    Northing = u * np.cos(gamma_c) - v * np.sin(gamma_c)
     
-    return easting, northing
+    return Easting, Northing
 
 def molodensky_transform(lat, lon, h, dx, dy, dz):
     a_w = 6378137.0; f_w = 1 / 298.257223563
@@ -85,11 +90,9 @@ def molodensky_transform(lat, lon, h, dx, dy, dz):
     e2w = 2*f_w - f_w**2
     M = a_w * (1 - e2w) / (1 - e2w * np.sin(phi)**2)**1.5
     N = a_w / np.sqrt(1 - e2w * np.sin(phi)**2)
-    
     dphi = (-dx*np.sin(phi)*np.cos(lam) - dy*np.sin(phi)*np.sin(lam) + dz*np.cos(phi) + (a_w*df + f_w*da)*np.sin(2*phi)) / (M + h)
     dlam = (-dx*np.sin(lam) + dy*np.cos(lam)) / ((N + h) * np.cos(phi))
     dh = dx*np.cos(phi)*np.cos(lam) + dy*np.cos(phi)*np.sin(lam) + dz*np.sin(phi) - (a_w*df + f_w*da)*np.sin(phi)**2 + da
-    
     return lat + np.degrees(dphi), lon + np.degrees(dlam), h + dh
 
 # 5. MAIN CONTENT
@@ -107,7 +110,7 @@ with col1:
         with col2:
             st.subheader("📤 Output: Timbalai 1948 HOM")
             lat_t, lon_t, h_t = molodensky_transform(lat_in, lon_in, h_in, dx, dy, dz)
-            e, n = latlon_to_hom(lat_t, lon_t)
+            e, n = latlon_to_hom_final(lat_t, lon_t)
             
             st.success("Calculated!")
             st.metric("Easting (E)", f"{e:.3f} m")
