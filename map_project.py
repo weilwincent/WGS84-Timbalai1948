@@ -3,14 +3,15 @@ import numpy as np
 import base64
 import os
 
-# 1. PAGE SETUP - Fixed AttributeError from your screenshot
-st.set_page_config(page_title="SBEU 3893 - WGS84 Geocentric", page_icon="📍", layout="wide")
+# 1. PAGE SETUP - Fixed the typo st.set_config -> st.set_page_config
+st.set_page_config(page_title="SBEU 3893 - WGS84 Verification", page_icon="📍", layout="wide")
 
 # 2. CUSTOM STYLING (Darker Steel Blue Sidebar)
 def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
             bin_str = base64.b64encode(f.read()).decode()
+        # Use {{ }} for CSS braces inside f-strings
         st.markdown(f"""
             <style>
             .stApp {{
@@ -53,7 +54,7 @@ def geodetic_to_cartesian(lat, lon, h):
     phi = np.radians(lat)
     lam = np.radians(lon)
     
-    # Radius of curvature in the prime vertical
+    # Radius of curvature in the prime vertical (N)
     N = a / np.sqrt(1 - e2 * np.sin(phi)**2)
     
     X = (N + h) * np.cos(phi) * np.cos(lam)
@@ -80,18 +81,14 @@ with col1:
         with col2:
             st.subheader("📤 Output: Geocentric X, Y, Z")
             st.success("Conversion Complete!")
-            # Displaying with high precision to match survey software
             st.metric("X (meters)", f"{X:.3f}")
             st.metric("Y (meters)", f"{Y:.3f}")
             st.metric("Z (meters)", f"{Z:.3f}")
             
-            # Validation Check
-            target_x = 2787565.983
-            diff = abs(X - target_x)
-            if diff < 1.0:
-                st.info("✅ Matches Survey Software within tolerance.")
-            else:
-                st.warning(f"Note: Difference from target X is {diff:.3f}m")
+            # Comparison Logic
+            st.divider()
+            st.write("**Reference Software Values:**")
+            st.write(f"X: 2787565.983 | Y: 5698693.034 | Z: 657805.200")
 
 # 7. DEVELOPER CREDITS
 st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255,255,255,0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W., Rebecca J., Achellis L., Nor Muhamad, Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
