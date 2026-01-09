@@ -151,7 +151,7 @@ if st.session_state.results:
 # 9. MATHEMATICAL PRINCIPLES
 st.divider()
 with st.expander("📖 View Mathematical Model"):
-    [Image of Bursa-Wolf 7-parameter transformation showing translation, rotation, and scale factors]
+    
     st.latex(r"\mathbf{X}_{Local} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
 
 # 10. FOOTER
