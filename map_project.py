@@ -124,13 +124,14 @@ st.markdown(
     </style>
     <div class="footer-box">
         <div class="group-title">DEVELOPED BY:</div>
-        <p class="footer-text">1. Weil W.</p>
-        <p class="footer-text">2. Rebecca J.</p>
-        <p class="footer-text">3. Achellis L.</p>
-        <p class="footer-text">4. Nor Muhamad</p>
-        <p class="footer-text">5. Rowell B.S</p>
-        <p class="footer-text" style="margin-top:5px; color: #800000;"><b>3 SGHU - UTM FABU</b></p>
+        <p class="footer-text">Weil W.</p>
+        <p class="footer-text">Rebecca J.</p>
+        <p class="footer-text">Achellis L.</p>
+        <p class="footer-text">Nor Muhamad</p>
+        <p class="footer-text">Rowell B.S</p>
+        <p class="footer-text" style="margin-top:5px; color: #800000;"><b>SBEU 3893</b></p>
     </div>
     """,
     unsafe_allow_html=True
+
 )
