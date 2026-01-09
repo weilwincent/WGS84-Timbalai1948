@@ -135,7 +135,7 @@ with col_out:
 # 8. MATHEMATICAL PRINCIPLES
 st.divider()
 st.subheader("📖 Mathematical Principles")
-[Image of Bursa-Wolf 7-parameter transformation showing translation, rotation, and scale factors]
+
 with st.expander("View Helmert Equations", expanded=True):
     st.write("The Helmert Transformation (Coordinate Frame Rotation) shifts coordinates using seven parameters:")
     st.latex(r"\mathbf{X}_{Local} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
