@@ -33,11 +33,11 @@ if 'balloons_fired' not in st.session_state:
     st.session_state.balloons_fired = False
 
 # 4. MATH ENGINE: SIMPLE MOLODENSKY
-def simple_molodensky(lat, lon, h, dx, dy, dz):
-    # WGS84 (Source)
+def simple_molodensky_horizontal(lat, lon, h, dx, dy, dz):
+    # WGS84 (Source Ellipsoid)
     a = 6378137.0
     f = 1 / 298.257223563
-    # Everest 1830 (Target)
+    # Everest 1830 (Target Ellipsoid for Timbalai)
     a_t = 6377298.556
     f_t = 1 / 300.8017
     
@@ -63,24 +63,21 @@ def simple_molodensky(lat, lon, h, dx, dy, dz):
     # Delta Longitude (radians)
     dlam = (-dx * sin_lam + dy * cos_lam) / ((N + h) * cos_phi)
     
-    # Delta Height (meters)
-    dh = dx * cos_phi * cos_lam + dy * cos_phi * sin_lam + dz * sin_phi - (a * df + f * da) * sin_phi**2 + da
-    
-    return lat + np.degrees(dphi), lon + np.degrees(dlam), h + dh
+    return lat + np.degrees(dphi), lon + np.degrees(dlam)
 
 # 5. SIDEBAR
 if os.path.exists("utm.png"):
     st.sidebar.image("utm.png", use_container_width=True)
 
-st.sidebar.title("⚙️ Molodensky Parameters")
-st.sidebar.info("Simple Molodensky uses 3 translation shifts (dX, dY, dZ) between ellipsoids.")
+st.sidebar.title("⚙️ Molodensky Params")
+st.sidebar.info("3-Parameter Shift (dX, dY, dZ)")
 dx = st.sidebar.number_input("dX (m)", value=596.096, format="%.3f")
 dy = st.sidebar.number_input("dY (m)", value=-624.512, format="%.3f")
 dz = st.sidebar.number_input("dZ (m)", value=2.779, format="%.3f")
 
 # 6. MAIN UI
 st.title("🛰️ Simple Molodensky Transformation")
-st.write("WGS84 to Timbalai 1948 (Standard 3-Parameter Shift)")
+st.write("Horizontal Shift (Height Maintained from Input)")
 
 col_in, col_out = st.columns(2)
 with col_in:
@@ -91,15 +88,16 @@ with col_in:
     
     if st.button("🚀 Transform Point"):
         st.session_state.balloons_fired = False 
-        lat_t, lon_t, h_t = simple_molodensky(lat_in, lon_in, h_in, dx, dy, dz)
-        st.session_state.results = {"lat_t": lat_t, "lon_t": lon_t, "h_t": h_t, "lat_orig": lat_in, "lon_orig": lon_in}
+        lat_t, lon_t = simple_molodensky_horizontal(lat_in, lon_in, h_in, dx, dy, dz)
+        # Results stored with preserved height
+        st.session_state.results = {"lat_t": lat_t, "lon_t": lon_t, "h_t": h_in, "lat_orig": lat_in, "lon_orig": lon_in}
 
 with col_out:
     if st.session_state.results:
         st.subheader("📤 Output: Timbalai 1948")
         st.metric("Latitude", f"{st.session_state.results['lat_t']:.9f}°")
         st.metric("Longitude", f"{st.session_state.results['lon_t']:.9f}°")
-        st.metric("Height (m)", f"{st.session_state.results['h_t']:.3f}")
+        st.metric("Height (m)", f"{st.session_state.results['h_t']:.3f} (Preserved)")
         
         if not st.session_state.balloons_fired:
             st.balloons()
@@ -110,10 +108,10 @@ st.divider()
 st.subheader("📖 Mathematical Principles")
 
 with st.expander("View Molodensky Equations", expanded=True):
-    st.write("The Simple Molodensky equations calculate the change in curvilinear coordinates directly:")
-    st.latex(r"\Delta \phi'' = \frac{-dx \sin \phi \cos \lambda - dy \sin \phi \sin \lambda + dz \cos \phi + (a \Delta f + f \Delta a) \sin 2\phi}{(M+h) \sin 1''}")
-    st.latex(r"\Delta \lambda'' = \frac{-dx \sin \lambda + dy \cos \lambda}{(N+h) \cos \phi \sin 1''}")
-    st.write("This method is efficient because it avoids the conversion to Cartesian $X, Y, Z$ first.")
+    st.write("The Simple Molodensky equations adjust curvilinear coordinates using the ellipsoid parameters differences ($\Delta a$ and $\Delta f$):")
+    st.latex(r"\Delta \phi = \frac{-dx \sin \phi \cos \lambda - dy \sin \phi \sin \lambda + dz \cos \phi + (a \Delta f + f \Delta a) \sin 2\phi}{M+h}")
+    st.latex(r"\Delta \lambda = \frac{-dx \sin \lambda + dy \cos \lambda}{(N+h) \cos \phi}")
+    st.write("Height is maintained as a constant ($h_{out} = h_{in}$) as per user configuration.")
 
 # 8. MAP ROW
 if st.session_state.results:
