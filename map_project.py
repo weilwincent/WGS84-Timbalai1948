@@ -78,4 +78,64 @@ scale_p = st.sidebar.number_input("Scale (ppm)", value=-10.454, format="%.6f")
 
 # 6. MAIN UI
 st.title("🛰️ Professional 7-Parameter Transformation Module")
-st.write("SBEU 3893 - Geomatics Creative Map and Innovation Competition 20
+st.write("SBEU 3893 - Geomatics Creative Map and Innovation Competition 2026")
+
+col_in, col_out = st.columns(2)
+with col_in:
+    st.subheader("📥 Input: WGS84")
+    lat_in = st.number_input("Latitude", value=5.573408816, format="%.9f")
+    lon_in = st.number_input("Longitude", value=116.035751582, format="%.9f")
+    h_in = st.number_input("Height (m)", value=48.502, format="%.3f")
+    
+    if st.button("🚀 Transform Point"):
+        # Reset balloons for new calculation
+        st.session_state.balloons_fired = False 
+        P_tim = bursa_wolf_transform(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
+        st.session_state.results = {"X": P_tim[0], "Y": P_tim[1], "Z": P_tim[2], "lat": lat_in, "lon": lon_in}
+
+with col_out:
+    if st.session_state.results:
+        st.subheader("📤 Output: Timbalai 1948")
+        st.metric("Timbalai X (m)", f"{st.session_state.results['X']:.3f}")
+        st.metric("Timbalai Y (m)", f"{st.session_state.results['Y']:.3f}")
+        st.metric("Timbalai Z (m)", f"{st.session_state.results['Z']:.3f}")
+        
+        if not st.session_state.balloons_fired:
+            st.balloons()
+            st.session_state.balloons_fired = True
+
+# 7. MATHEMATICAL FORMULA SECTION
+st.divider()
+st.subheader("📖 Mathematical Principles")
+
+with st.expander("View Transformation Formulas", expanded=True):
+    st.markdown("### 1. Geodetic to Cartesian Conversion")
+    st.latex(r"X = (N + h) \cos \phi \cos \lambda")
+    st.latex(r"Y = (N + h) \cos \phi \sin \lambda")
+    st.latex(r"Z = [N(1 - e^2) + h] \sin \phi")
+    
+    st.divider()
+    st.markdown("### 2. Bursa-Wolf 7-Parameter Model")
+    
+    st.latex(r"\mathbf{X}_{Local} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
+    st.write("Where $\mathbf{R}$ is the rotation matrix constructed from $r_x, r_y, r_z$:")
+    st.latex(r'''R = \begin{bmatrix} 1 & r_z & -r_y \\ -r_z & 1 & r_x \\ r_y & -r_x & 1 \end{bmatrix}''')
+
+# 8. MAP ROW
+if st.session_state.results:
+    st.divider()
+    st.subheader("🗺️ Visual Verification")
+    m = folium.Map(location=[st.session_state.results['lat'], st.session_state.results['lon']], zoom_start=15)
+    folium.Marker([st.session_state.results['lat'], st.session_state.results['lon']], popup="Survey Point").add_to(m)
+    st_folium(m, use_container_width=True, height=400, key="borneo_map")
+
+# 9. FOOTER
+st.markdown("""
+    <div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; 
+    background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; 
+    border-radius: 8px; z-index: 1000;">
+        <p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p>
+        <p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p>
+        <p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p>
+    </div>
+    """, unsafe_allow_html=True)
