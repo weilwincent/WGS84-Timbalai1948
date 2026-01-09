@@ -76,4 +76,79 @@ def latlon_to_borneo_rso(lat, lon):
     A = (a * B * k0 * np.sqrt(1 - e2)) / (1 - e2 * np.sin(lat0)**2)
     t0 = np.tan(np.pi/4 - lat0/2) / ((1 - e*np.sin(lat0))/(1 + e*np.sin(lat0)))**(e/2)
     D = B * np.sqrt(1 - e2) / (np.cos(lat0) * np.sqrt(1 - e2 * np.sin(lat0)**2))
-    F = D + np.sqrt
+    F = D + np.sqrt(max(0, D**2 - 1))
+    E = F * (t0**B)
+    
+    t = np.tan(np.pi/4 - phi/2) / ((1 - e*np.sin(phi))/(1 + e*np.sin(phi)))**(e/2)
+    Q = E / (t**B)
+    S = (Q - 1/Q) / 2
+    T = (Q + 1/Q) / 2
+    V = np.sin(B * (lam - lon0))
+    U = (S * np.sin(alpha_c) - V * np.cos(alpha_c)) / T
+    
+    v = (A / (2 * B)) * np.log((1 - U) / (1 + U))
+    u = (A / B) * np.arctan2((S * np.cos(alpha_c) + V * np.sin(alpha_c)), 1.0)
+    
+    Easting = v * np.cos(gamma_c) + u * np.sin(gamma_c) + FE
+    Northing = u * np.cos(gamma_c) - v * np.sin(gamma_c) + FN
+    
+    return Easting, Northing
+
+def bursa_wolf_transform(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, scale_p):
+    a_w = 6378137.0; f_w = 1/298.257223563; e2w = 2*f_w - f_w**2
+    phi = np.radians(lat); lam = np.radians(lon)
+    N = a_w / np.sqrt(1 - e2w * np.sin(phi)**2)
+    Xw = (N + h) * np.cos(phi) * np.cos(lam)
+    Yw = (N + h) * np.cos(phi) * np.sin(lam)
+    Zw = (N * (1 - e2w) + h) * np.sin(phi)
+    
+    S = 1 + scale_p/1e6
+    rx = np.radians(rx_s/3600); ry = np.radians(ry_s/3600); rz = np.radians(rz_s/3600)
+    R = np.array([[1, -rz, ry], [rz, 1, -rx], [-ry, rx, 1]])
+    
+    P_local = np.array([dx, dy, dz]) + S * (R @ np.array([Xw, Yw, Zw]))
+    
+    a_t = 6377298.556; f_t = 1/300.8017; e2t = 2*f_t - f_t**2
+    x, y, z = P_local
+    lon_t = np.arctan2(y, x)
+    p = np.sqrt(x**2 + y**2)
+    phi_t = np.arctan2(z, p * (1 - e2t))
+    for _ in range(5):
+        Nt = a_t / np.sqrt(1 - e2t * np.sin(phi_t)**2)
+        phi_t = np.arctan2(z + e2t * Nt * np.sin(phi_t), p)
+    ht = p / np.cos(phi_t) - Nt
+    return np.degrees(phi_t), np.degrees(lon_t), ht
+
+# 5. MAIN CONTENT
+st.title("🛰️ Calibrated Borneo RSO Module")
+st.markdown("### Geomatics Creative Map and Innovation Competition 2026")
+
+col1, col2 = st.columns(2)
+with col1:
+    st.subheader("📥 Input: WGS84")
+    lat_in = st.number_input("Latitude", value=5.573408816, format="%.9f")
+    lon_in = st.number_input("Longitude", value=116.035751582, format="%.9f")
+    h_in = st.number_input("Height (m)", value=48.502, format="%.3f")
+    
+    if st.button("🚀 Transform Coordinates"):
+        with col2:
+            st.subheader("📤 Output: Timbalai 1948 RSO")
+            # Step 1: Datum Shift
+            lt, ln, ht = bursa_wolf_transform(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
+            # Step 2: RSO Projection
+            e, n = latlon_to_borneo_rso(lt, ln)
+            
+            st.success("Calculated Successfully!")
+            st.metric("Easting (E)", f"{e:.3f} m")
+            st.metric("Northing (N)", f"{n:.3f} m")
+            st.metric("Height (h)", f"{ht:.3f} m")
+            st.info(f"Geodetic: {lt:.6f}, {ln:.6f}")
+            st.balloons()
+
+# 6. THEORY (Inside expander for space)
+st.divider()
+with st.expander("📖 View Mathematical Process"):
+    st.write("WGS84 ➔ Bursa-Wolf 7-Parameter Shift ➔ Everest 1830 (Mod) ➔ Hotine Oblique Mercator Rotation.")
+
+# 7. DEVELOPER CREDITS
+st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255,255,255,0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W., Rebecca J., Achellis L., Nor Muhamad, Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
