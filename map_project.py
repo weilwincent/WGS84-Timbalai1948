@@ -97,8 +97,8 @@ rz_s = st.sidebar.number_input("rZ (sec)", value=1.828440, format="%.6f")
 scale_p = st.sidebar.number_input("Scale (ppm)", value=-10.454, format="%.6f")
 
 # 7. MAIN UI
-st.title("🛰️ Professional Geodetic Transformation")
-st.write("Helmert 7-Parameter | DMS Output | Height Maintained")
+st.title("🛰️ Coordinate Transformation Module")
+st.write("7-Parameter | DMS Output | Height Maintained")
 
 col_in, col_out = st.columns(2)
 with col_in:
@@ -156,3 +156,4 @@ with st.expander("📖 View Mathematical Model"):
 
 # 10. FOOTER
 st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
+
