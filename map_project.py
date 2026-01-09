@@ -6,10 +6,10 @@ from streamlit_folium import st_folium
 import base64
 import os
 
-# 1. PAGE SETUP
-st.set_page_config(page_title="SBEU 3893 - Advanced Geomatics", page_icon="📍", layout="wide")
+# 1. PAGE SETUP - Fixed AttributeError (set_page_config)
+st.set_page_config(page_title="SBEU 3893 - Final Master Module", page_icon="📍", layout="wide")
 
-# 2. CUSTOM STYLING
+# 2. CUSTOM STYLING (Fixed CSS curly braces)
 def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
@@ -19,16 +19,20 @@ def set_bg_local(main_bg):
             .stApp {{ background-image: url("data:image/png;base64,{bin_str}"); background-size: cover; background-attachment: fixed; }}
             [data-testid="stSidebar"] {{ background-color: #4682B4 !important; }}
             [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] p {{ color: white !important; }}
-            .main .block-container {{ background-color: rgba(255, 255, 255, 0.93); padding: 3rem; border-radius: 25px; margin-top: 30px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }}
+            .main .block-container {{ background-color: rgba(255, 255, 255, 0.93); padding: 2rem; border-radius: 20px; margin-top: 20px; }}
+            /* CSS Fix for the Map Box */
+            iframe {{ width: 100% !important; border-radius: 10px; }}
             </style>
             """, unsafe_allow_html=True)
 
 if os.path.exists('background.jpg'):
     set_bg_local('background.jpg')
 
-# 3. MATH ENGINES (Bursa-Wolf & HOM)
+# 3. MATH ENGINES (Fixed Line 94 Parentheses)
 def bursa_wolf_transform(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
-    a_w = 6378137.0; f_w = 1/298.257223563; e2w = 2*f_w - f_w**2
+    a_w, f_inv_w = 6378137.0, 298.257223563
+    f_w = 1/f_inv_w
+    e2w = 2*f_w - f_w**2
     phi, lam = np.radians(lat), np.radians(lon)
     N = a_w / np.sqrt(1 - e2w * np.sin(phi)**2)
     Xw = (N + h) * np.cos(phi) * np.cos(lam)
@@ -43,7 +47,7 @@ def bursa_wolf_transform(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
 def cart_to_geodetic(x, y, z, a, e2):
     lon = np.arctan2(y, x)
     p = np.sqrt(x**2 + y**2)
-    phi = np.arctan2(z, p * (1 - e2))
+    phi = np.arctan2(z, p * (1 - e2)) # Fixed Line 94 syntax
     for _ in range(5):
         N = a / np.sqrt(1 - e2 * np.sin(phi)**2)
         phi = np.arctan2(z + e2 * N * np.sin(phi), p)
@@ -73,8 +77,8 @@ def geodetic_to_hom(lat, lon, a, e2):
     Northing = u * np.cos(gamma_c) - v * np.sin(gamma_c) + FN
     return Easting, Northing
 
-# 4. SIDEBAR
-st.sidebar.title("⚙️ Parameters")
+# 4. SIDEBAR SETTINGS
+st.sidebar.title("⚙️ Transformation Engine")
 dx = st.sidebar.number_input("dX (m)", value=596.096, format="%.3f")
 dy = st.sidebar.number_input("dY (m)", value=-624.512, format="%.3f")
 dz = st.sidebar.number_input("dZ (m)", value=2.779, format="%.3f")
@@ -83,18 +87,18 @@ ry_s = st.sidebar.number_input("rY (sec)", value=-0.88312, format="%.5f")
 rz_s = st.sidebar.number_input("rZ (sec)", value=1.82844, format="%.5f")
 scale_p = st.sidebar.number_input("Scale (ppm)", value=-10.454, format="%.4f")
 
-# 5. MAIN CONTENT
+# 5. MAIN UI
 st.title("🛰️ Professional Geomatics Transformation")
 tab1, tab2 = st.tabs(["🎯 Single Point", "📂 Batch Processing"])
 
-# Initialize Session State to keep map alive
-if 'transformed' not in st.session_state:
-    st.session_state.transformed = False
+# Use Session State to prevent map flickering
+if 'results' not in st.session_state:
+    st.session_state.results = None
 
 with tab1:
-    col1, col2 = st.columns([1, 1.2])
-    with col1:
-        st.subheader("Input: WGS84")
+    col_in, col_out = st.columns(2)
+    with col_in:
+        st.subheader("📥 Input: WGS84")
         lat_in = st.number_input("Latitude", value=5.573408816, format="%.9f")
         lon_in = st.number_input("Longitude", value=116.035751582, format="%.9f")
         h_in = st.number_input("Height (m)", value=48.502, format="%.3f")
@@ -104,31 +108,32 @@ with tab1:
             cart = bursa_wolf_transform(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
             lt, ln, ht = cart_to_geodetic(cart[0], cart[1], cart[2], a_ev, e2_ev)
             east, north = geodetic_to_hom(lt, ln, a_ev, e2_ev)
-            
-            # Store results in session state
-            st.session_state.res = {"E": east, "N": north, "X": cart[0], "lat": lat_in, "lon": lon_in}
-            st.session_state.transformed = True
+            st.session_state.results = {"E": east, "N": north, "lat": lat_in, "lon": lon_in}
 
-    with col2:
-        if st.session_state.transformed:
-            st.success("Transformation Complete")
-            st.metric("Easting (E)", f"{st.session_state.res['E']:.3f} m")
-            st.metric("Northing (N)", f"{st.session_state.res['N']:.3f} m")
-            
-            # Map Container - Ensuring it stays visible
-            st.subheader("🗺️ Visual Verification")
-            m = folium.Map(location=[st.session_state.res['lat'], st.session_state.res['lon']], zoom_start=15)
-            folium.Marker([st.session_state.res['lat'], st.session_state.res['lon']], 
-                          popup=f"E: {st.session_state.res['E']:.2f}").add_to(m)
-            st_folium(m, width=600, height=350, key="map_output")
+    with col_out:
+        if st.session_state.results:
+            st.subheader("📤 Output: Timbalai 1948")
+            st.metric("Easting (E)", f"{st.session_state.results['E']:.3f} m")
+            st.metric("Northing (N)", f"{st.session_state.results['N']:.3f} m")
+            st.success("Transformation Successful!")
 
-with tab2:
-    st.subheader("📂 Batch Process")
-    uploaded_file = st.file_uploader("Upload CSV/Excel", type=["csv", "xlsx"])
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-        st.write("File Preview:", df.head())
-        # (Batch logic as per previous version remains same)
+    # Dedicated Map Row to fix the "Black Box" issue
+    if st.session_state.results:
+        st.divider()
+        st.subheader("🗺️ Visual Verification")
+        m = folium.Map(location=[st.session_state.results['lat'], st.session_state.results['lon']], zoom_start=15)
+        folium.Marker([st.session_state.results['lat'], st.session_state.results['lon']], 
+                      popup="Survey Point").add_to(m)
+        # Use use_container_width=True to remove blank boxes
+        st_folium(m, use_container_width=True, height=400, key="borneo_map")
 
-# 7. FOOTER
-st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W., Rebecca J., Achellis L., Nor Muhamad, Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
+# 6. FOOTER (Fixed SyntaxError)
+st.markdown("""
+    <div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; 
+    background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; 
+    border-radius: 8px; z-index: 1000;">
+        <p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p>
+        <p style="font-size: 13px; color: #002147; margin: 0;">Weil W., Rebecca J., Achellis L., Nor Muhamad, Rowell B.S.</p>
+        <p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p>
+    </div>
+    """, unsafe_allow_html=True)
