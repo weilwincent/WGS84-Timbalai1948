@@ -39,7 +39,7 @@ def set_bg_local(main_bg):
 
 set_bg_local('background.jpg')
 
-# 3. SIDEBAR: LOGO AND PARAMETERS
+# 3. SIDEBAR: LOGO AND PARAMETERS (With High Precision)
 if os.path.exists("utm.png"):
     st.sidebar.image("utm.png", use_container_width=True)
 else:
@@ -48,13 +48,16 @@ else:
 st.sidebar.divider()
 st.sidebar.header("⚙️ 7-Parameter Inputs")
 
-dx = st.sidebar.number_input("dX (m)", value=596.0960)
-dy = st.sidebar.number_input("dY (m)", value=-624.5120)
-dz = st.sidebar.number_input("dZ (m)", value=2.7790)
-rx_sec = st.sidebar.number_input("rX (arc-sec)", value=-1.446460)
-ry_sec = st.sidebar.number_input("rY (arc-sec)", value=-0.883120)
-rz_sec = st.sidebar.number_input("rZ (arc-sec)", value=1.828440)
-scale_ppm = st.sidebar.number_input("Scale (ppm)", value=-10.454)
+# Translation - usually 3 decimals is enough for meters
+dx = st.sidebar.number_input("dX (m)", value=-679.0, format="%.3f")
+dy = st.sidebar.number_input("dY (m)", value=669.0, format="%.3f")
+dz = st.sidebar.number_input("dZ (m)", value=-48.0, format="%.3f")
+
+# Rotation & Scale - often need 6 to 8 decimals for high precision
+rx_sec = st.sidebar.number_input("rX (arc-sec)", value=0.0, format="%.8f", step=0.000001)
+ry_sec = st.sidebar.number_input("rY (arc-sec)", value=0.0, format="%.8f", step=0.000001)
+rz_sec = st.sidebar.number_input("rZ (arc-sec)", value=0.0, format="%.8f", step=0.000001)
+scale_ppm = st.sidebar.number_input("Scale (ppm)", value=0.0, format="%.8f", step=0.000001)
 
 # 4. MATH LOGIC: BURSA-WOLF 7-PARAMETER
 A_WGS = 6378137.0
@@ -146,6 +149,7 @@ st.markdown(
     """, unsafe_allow_html=True
 
 )
+
 
 
 
