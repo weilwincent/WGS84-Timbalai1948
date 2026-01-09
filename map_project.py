@@ -48,13 +48,13 @@ else:
 st.sidebar.divider()
 st.sidebar.header("⚙️ 7-Parameter Inputs")
 
-dx = st.sidebar.number_input("dX (m)", value=-679.0)
-dy = st.sidebar.number_input("dY (m)", value=669.0)
-dz = st.sidebar.number_input("dZ (m)", value=-48.0)
-rx_sec = st.sidebar.number_input("rX (arc-sec)", value=0.0)
-ry_sec = st.sidebar.number_input("rY (arc-sec)", value=0.0)
-rz_sec = st.sidebar.number_input("rZ (arc-sec)", value=0.0)
-scale_ppm = st.sidebar.number_input("Scale (ppm)", value=0.0)
+dx = st.sidebar.number_input("dX (m)", value=596.0960)
+dy = st.sidebar.number_input("dY (m)", value=-624.5120)
+dz = st.sidebar.number_input("dZ (m)", value=2.7790)
+rx_sec = st.sidebar.number_input("rX (arc-sec)", value=-1.446460)
+ry_sec = st.sidebar.number_input("rY (arc-sec)", value=-0.883120)
+rz_sec = st.sidebar.number_input("rZ (arc-sec)", value=1.828440)
+scale_ppm = st.sidebar.number_input("Scale (ppm)", value=-10.454)
 
 # 4. MATH LOGIC: BURSA-WOLF 7-PARAMETER
 A_WGS = 6378137.0
@@ -146,6 +146,7 @@ st.markdown(
     """, unsafe_allow_html=True
 
 )
+
 
 
 
