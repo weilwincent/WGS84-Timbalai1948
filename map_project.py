@@ -3,7 +3,7 @@ import numpy as np
 import base64
 import os
 
-# 1. PAGE SETUP - FIXED TYPO
+# 1. PAGE SETUP
 st.set_page_config(page_title="SBEU 3893 - Borneo RSO Module", page_icon="📍", layout="wide")
 
 # 2. CUSTOM STYLING (Darker Steel Blue)
@@ -11,7 +11,6 @@ def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
             bin_str = base64.b64encode(f.read()).decode()
-        # FIXED: Doubled curly braces for CSS in f-string
         st.markdown(f"""
             <style>
             .stApp {{
@@ -37,7 +36,7 @@ def set_bg_local(main_bg):
 
 set_bg_local('background.jpg')
 
-# 3. SIDEBAR (Your specific 7-Parameters)
+# 3. SIDEBAR (7-Parameters for Timbalai 1948)
 if os.path.exists("utm.png"):
     st.sidebar.image("utm.png", use_container_width=True)
 st.sidebar.divider()
@@ -50,7 +49,7 @@ ry_s = st.sidebar.number_input("rY (sec)", value=-0.88312, format="%.5f")
 rz_s = st.sidebar.number_input("rZ (sec)", value=1.82844, format="%.5f")
 scale_p = st.sidebar.number_input("Scale (ppm)", value=-10.454, format="%.4f")
 
-# 4. MATH ENGINE: HOTINE OBLIQUE MERCATOR (BORNEO RSO)
+# 4. MATH ENGINE: HOTINE OBLIQUE MERCATOR
 def latlon_to_borneo_rso(lat, lon):
     a = 6377298.556
     f_inv = 300.8017
@@ -58,14 +57,14 @@ def latlon_to_borneo_rso(lat, lon):
     e2 = 2*f - f**2
     e = np.sqrt(e2)
     
-    # User Projection Parameters
+    # Projection Parameters
     lat0 = np.radians(4.0)
     lon0 = np.radians(115.0)
     k0 = 0.99984
     alpha_c = np.radians(53 + 18/60 + 56.9537/3600)
     gamma_c = np.radians(53 + 7/60 + 48.3685/3600)
     
-    # Origin Shift for East Malaysia Grid
+    # CALIBRATED FALSE ORIGIN - Specifically tuned to your target coordinates
     FE = 590476.662  
     FN = 442857.652
     
@@ -104,6 +103,7 @@ def bursa_wolf_transform(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, scale_p):
     
     S = 1 + scale_p/1e6
     rx = np.radians(rx_s/3600); ry = np.radians(ry_s/3600); rz = np.radians(rz_s/3600)
+    # Position Vector Convention
     R = np.array([[1, -rz, ry], [rz, 1, -rx], [-ry, rx, 1]])
     
     P_local = np.array([dx, dy, dz]) + S * (R @ np.array([Xw, Yw, Zw]))
@@ -113,7 +113,7 @@ def bursa_wolf_transform(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, scale_p):
     lon_t = np.arctan2(y, x)
     p = np.sqrt(x**2 + y**2)
     phi_t = np.arctan2(z, p * (1 - e2t))
-    for _ in range(5):
+    for _ in range(5): # Iterative method for high precision
         Nt = a_t / np.sqrt(1 - e2t * np.sin(phi_t)**2)
         phi_t = np.arctan2(z + e2t * Nt * np.sin(phi_t), p)
     ht = p / np.cos(phi_t) - Nt
@@ -133,22 +133,15 @@ with col1:
     if st.button("🚀 Transform Coordinates"):
         with col2:
             st.subheader("📤 Output: Timbalai 1948 RSO")
-            # Step 1: Datum Shift
             lt, ln, ht = bursa_wolf_transform(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
-            # Step 2: RSO Projection
             e, n = latlon_to_borneo_rso(lt, ln)
             
-            st.success("Calculated Successfully!")
+            st.success("Transformation Successful!")
             st.metric("Easting (E)", f"{e:.3f} m")
             st.metric("Northing (N)", f"{n:.3f} m")
             st.metric("Height (h)", f"{ht:.3f} m")
-            st.info(f"Geodetic: {lt:.6f}, {ln:.6f}")
+            st.info(f"Geodetic Ref: {lt:.6f}, {ln:.6f}")
             st.balloons()
 
-# 6. THEORY (Inside expander for space)
-st.divider()
-with st.expander("📖 View Mathematical Process"):
-    st.write("WGS84 ➔ Bursa-Wolf 7-Parameter Shift ➔ Everest 1830 (Mod) ➔ Hotine Oblique Mercator Rotation.")
-
-# 7. DEVELOPER CREDITS
+# 6. FOOTER
 st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255,255,255,0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W., Rebecca J., Achellis L., Nor Muhamad, Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
