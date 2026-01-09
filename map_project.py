@@ -49,9 +49,9 @@ st.sidebar.divider()
 st.sidebar.header("⚙️ Transformation Parameters")
 
 # Standard Shifts for WGS84 to Timbalai 1948
-dx = st.sidebar.number_input("dX (m)", value=-679.0, format="%.3f")
-dy = st.sidebar.number_input("dY (m)", value=669.0, format="%.3f")
-dz = st.sidebar.number_input("dZ (m)", value=-48.0, format="%.3f")
+dx = st.sidebar.number_input("dX (m)", value=679.0, format="%.3f")
+dy = st.sidebar.number_input("dY (m)", value=-669.0, format="%.3f")
+dz = st.sidebar.number_input("dZ (m)", value=48.0, format="%.3f")
 
 # 4. MATH LOGIC: SIMPLE MOLODENSKY
 # WGS84 Ellipsoid (Source)
@@ -146,4 +146,5 @@ st.markdown(
         <p class="footer-text" style="margin-top:5px; color: #800000;"><b>SBEU 3893</b></p>
     </div>
     """, unsafe_allow_html=True
+
 )
