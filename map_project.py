@@ -3,15 +3,14 @@ import numpy as np
 import base64
 import os
 
-# 1. PAGE SETUP - Fixed the typo st.set_config -> st.set_page_config
-st.set_page_config(page_title="SBEU 3893 - WGS84 Verification", page_icon="📍", layout="wide")
+# 1. PAGE SETUP
+st.set_page_config(page_title="SBEU 3893 - Ellipsoid Comparator", page_icon="📍", layout="wide")
 
-# 2. CUSTOM STYLING (Darker Steel Blue Sidebar)
+# 2. CUSTOM STYLING
 def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
             bin_str = base64.b64encode(f.read()).decode()
-        # Use {{ }} for CSS braces inside f-strings
         st.markdown(f"""
             <style>
             .stApp {{
@@ -38,57 +37,6 @@ def set_bg_local(main_bg):
 if os.path.exists('background.jpg'):
     set_bg_local('background.jpg')
 
-# 3. SIDEBAR
+# 3. SIDEBAR: ELLIPSOID TOGGLE
 if os.path.exists("utm.png"):
-    st.sidebar.image("utm.png", use_container_width=True)
-st.sidebar.title("📍 Geocentric Engine")
-st.sidebar.info("Converting Geodetic (Lat, Lon, H) to Geocentric Cartesian (X, Y, Z).")
-
-# 4. MATH LOGIC: GEODETIC TO CARTESIAN (WGS84)
-def geodetic_to_cartesian(lat, lon, h):
-    # Standard WGS84 Ellipsoid Constants
-    a = 6378137.0
-    f = 1 / 298.257223563
-    e2 = (2 * f) - (f ** 2)
-    
-    phi = np.radians(lat)
-    lam = np.radians(lon)
-    
-    # Radius of curvature in the prime vertical (N)
-    N = a / np.sqrt(1 - e2 * np.sin(phi)**2)
-    
-    X = (N + h) * np.cos(phi) * np.cos(lam)
-    Y = (N + h) * np.cos(phi) * np.sin(lam)
-    Z = (N * (1 - e2) + h) * np.sin(phi)
-    
-    return X, Y, Z
-
-# 5. MAIN CONTENT
-st.title("🛰️ WGS84 Geocentric Conversion")
-st.markdown("### Verification against Survey Software Results")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("📥 Input: Geodetic")
-    lat_in = st.number_input("Latitude", value=5.573408816, format="%.9f")
-    lon_in = st.number_input("Longitude", value=116.035751582, format="%.9f")
-    h_in = st.number_input("Height (m)", value=48.502, format="%.3f")
-    
-    if st.button("🚀 Convert to Cartesian"):
-        X, Y, Z = geodetic_to_cartesian(lat_in, lon_in, h_in)
-        
-        with col2:
-            st.subheader("📤 Output: Geocentric X, Y, Z")
-            st.success("Conversion Complete!")
-            st.metric("X (meters)", f"{X:.3f}")
-            st.metric("Y (meters)", f"{Y:.3f}")
-            st.metric("Z (meters)", f"{Z:.3f}")
-            
-            # Comparison Logic
-            st.divider()
-            st.write("**Reference Software Values:**")
-            st.write(f"X: 2787565.983 | Y: 5698693.034 | Z: 657805.200")
-
-# 7. DEVELOPER CREDITS
-st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255,255,255,0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W., Rebecca J., Achellis L., Nor Muhamad, Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
+    st.sidebar.image("utm.png", use_
