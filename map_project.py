@@ -84,7 +84,7 @@ def bursa_wolf_transform(P_wgs, dx, dy, dz, rx, ry, rz, s_ppm):
     return T + S * (R @ P_wgs)
 
 # 5. MAIN CONTENT
-st.title("🛰️ 7-Parameter Transformation Innovation")
+st.title("🛰️ 7-Parameter Transformation module")
 st.markdown("### Geomatics Creative Map and Innovation Competition 2026")
 st.markdown("<h4 style='color: #4682B4; font-weight: bold;'>Method: Bursa-Wolf 7-Parameter Model</h4>", unsafe_allow_html=True)
 
@@ -144,4 +144,5 @@ st.markdown(
         <p class="footer-text" style="margin-top:5px; color: #800000;"><b>SBEU 3893</b></p>
     </div>
     """, unsafe_allow_html=True
+
 )
