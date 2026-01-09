@@ -6,7 +6,7 @@ import os
 # 1. PAGE SETUP
 st.set_page_config(page_title="7-Parameter HOM Module", page_icon="📍", layout="wide")
 
-# 2. CUSTOM STYLING
+# 2. CUSTOM STYLING (Darker Steel Blue)
 def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
@@ -31,52 +31,51 @@ dx = st.sidebar.number_input("dX (m)", value=-679.0, format="%.3f")
 dy = st.sidebar.number_input("dY (m)", value=669.0, format="%.3f")
 dz = st.sidebar.number_input("dZ (m)", value=-48.0, format="%.3f")
 
-# 4. MATH LOGIC: HOTINE OBLIQUE MERCATOR
-def latlon_to_hom_final(lat, lon):
-    # Everest 1830 (Modified)
+# 4. MATH LOGIC: HOTINE OBLIQUE MERCATOR (RECTIFIED TO CENTER)
+def latlon_to_hom_corrected(lat, lon):
+    # Everest 1830 (Modified) Ellipsoid
     a = 6377298.556
     f = 1 / 300.8017
     e2 = 2*f - f**2
     e = np.sqrt(e2)
     
-    # Parameters provided by user
-    lat0 = np.radians(4.0)
-    lon0 = np.radians(115.0)
-    k0 = 0.99984
-    alpha_c = np.radians(53 + 18/60 + 56.9537/3600) # Azimuth
-    gamma_c = np.radians(53 + 7/60 + 48.3685/3600) # Grid Angle
+    # YOUR SPECIFIC PARAMETERS
+    lat_o = np.radians(4.0)
+    lon_o = np.radians(115.0)
+    k = 0.99984
+    # Azimuth: 53.31582047° | Grid Angle: 53.13010236°
+    alpha_c = np.radians(53 + 18/60 + 56.9537/3600)
+    gamma_c = np.radians(53 + 7/60 + 48.3685/3600)
     
     phi = np.radians(lat)
     lam = np.radians(lon)
     
-    # Step 1: Constants
-    B = np.sqrt(1 + (e2 * np.cos(lat0)**4) / (1 - e2))
-    A = (a * B * k0 * np.sqrt(1 - e2)) / (1 - e2 * np.sin(lat0)**2)
-    t0 = np.tan(np.pi/4 - lat0/2) / ((1 - e*np.sin(lat0)) / (1 + e*np.sin(lat0)))**(e/2)
-    D = B * np.sqrt(1 - e2) / (np.cos(lat0) * np.sqrt(1 - e2 * np.sin(lat0)**2))
+    # 1. PRE-CALCULATION CONSTANTS
+    B = np.sqrt(1 + (e2 * np.cos(lat_o)**4) / (1 - e2))
+    A = (a * B * k * np.sqrt(1 - e2)) / (1 - e2 * np.sin(lat_o)**2)
     
-    # Check for D < 1 to prevent NaN
-    D2_1 = D**2 - 1
-    F = D + np.sqrt(max(0, D2_1))
+    t0 = np.tan(np.pi/4 - lat_o/2) / ((1 - e*np.sin(lat_o))/(1 + e*np.sin(lat_o)))**(e/2)
+    D = B * np.sqrt(1 - e2) / (np.cos(lat_o) * np.sqrt(1 - e2 * np.sin(lat_o)**2))
+    F = D + np.sqrt(max(0, D**2 - 1))
     E = F * (t0**B)
     
-    # Step 2: Spherical transformation
-    t = np.tan(np.pi/4 - phi/2) / ((1 - e*np.sin(phi)) / (1 + e*np.sin(phi)))**(e/2)
+    # Natural Origin Shift (uc) - THIS FIXES MASSIVE ERRORS
+    # uc is the value of u at the center of the projection
+    uc = (A / B) * np.arctan2(np.sqrt(max(0, D**2 - 1)), np.cos(alpha_c))
+    
+    # 2. TRANSFORMATION
+    t = np.tan(np.pi/4 - phi/2) / ((1 - e*np.sin(phi))/(1 + e*np.sin(phi)))**(e/2)
     Q = E / (t**B)
     S = (Q - 1/Q) / 2
     T = (Q + 1/Q) / 2
-    V = np.sin(B * (lam - lon0))
+    V = np.sin(B * (lam - lon_o))
     U = (S * np.sin(alpha_c) - V * np.cos(alpha_c)) / T
     
-    # Step 3: Rectified Coordinates (v, u)
-    # v is the distance from the initial line
+    # 3. RECTIFIED COMPONENTS
     v = (A / (2 * B)) * np.log((1 - U) / (1 + U))
-    # u is the distance along the initial line
-    u = (A / B) * np.arctan2((S * np.cos(alpha_c) + V * np.sin(alpha_c)), 1.0)
+    u = (A / B) * np.arctan2((S * np.cos(alpha_c) + V * np.sin(alpha_c)), 1.0) - uc
     
-    # Step 4: Rotation using the Rectified to Grid Angle (gamma_c)
-    # IMPORTANT: Many massive errors come from swapping u and v here.
-    # In HOM, u is the 'rectified northing' and v is the 'rectified easting'
+    # 4. ROTATION (Using Grid Angle)
     Easting = v * np.cos(gamma_c) + u * np.sin(gamma_c)
     Northing = u * np.cos(gamma_c) - v * np.sin(gamma_c)
     
@@ -96,7 +95,7 @@ def molodensky_transform(lat, lon, h, dx, dy, dz):
     return lat + np.degrees(dphi), lon + np.degrees(dlam), h + dh
 
 # 5. MAIN CONTENT
-st.title("🛰️ Professional HOM Transformation")
+st.title("🛰️ High-Precision HOM Transformation")
 st.markdown("### Geomatics Creative Map and Innovation Competition 2026")
 
 col1, col2 = st.columns(2)
@@ -106,13 +105,13 @@ with col1:
     lon_in = st.number_input("Longitude", value=116.03575158, format="%.8f")
     h_in = st.number_input("Height (m)", value=48.502)
     
-    if st.button("🚀 Calculate Precise Grid"):
+    if st.button("🚀 Calculate Easting & Northing"):
         with col2:
             st.subheader("📤 Output: Timbalai 1948 HOM")
             lat_t, lon_t, h_t = molodensky_transform(lat_in, lon_in, h_in, dx, dy, dz)
-            e, n = latlon_to_hom_final(lat_t, lon_t)
+            e, n = latlon_to_hom_corrected(lat_t, lon_t)
             
-            st.success("Calculated!")
+            st.success("Transformation Successful!")
             st.metric("Easting (E)", f"{e:.3f} m")
             st.metric("Northing (N)", f"{n:.3f} m")
             st.metric("Height (h)", f"{h_t:.3f} m")
