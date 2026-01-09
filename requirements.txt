@@ -1,2 +1,7 @@
 streamlit
+
 numpy
+streamlit
+numpy
+folium
+streamlit-folium
