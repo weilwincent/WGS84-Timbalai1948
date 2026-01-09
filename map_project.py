@@ -2,11 +2,14 @@ import streamlit as st
 import numpy as np
 import base64
 import os
+import folium
+from streamlit_folium import st_folium
 
 # 1. PAGE SETUP
-st.set_page_config(page_title="7-Parameter RSO Module", page_icon="📍", layout="wide")
+# Fixed: Standard Streamlit command to prevent AttributeError
+st.set_page_config(page_title="SBEU 3893 - 7-Parameter Module", page_icon="📍", layout="wide")
 
-# 2. CUSTOM STYLING (Darker Steel Blue Sidebar + Glass Effect)
+# 2. CUSTOM STYLING (Steel Blue Sidebar + Glass Effect)
 def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
@@ -32,6 +35,8 @@ def set_bg_local(main_bg):
                 margin-top: 30px;
                 box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
             }}
+            /* Map width fix */
+            iframe {{ width: 100% !important; border-radius: 15px; }}
             </style>
             """,
             unsafe_allow_html=True
@@ -46,95 +51,99 @@ else:
     st.sidebar.title("📍 UTM GEOMATICS")
 
 st.sidebar.divider()
-st.sidebar.header("⚙️ Datum Shift (WGS84 ➔ Timbalai)")
+st.sidebar.header("⚙️ 7-Parameter Inputs")
 
-dx = st.sidebar.number_input("dX (m)", value=-679.0, format="%.3f")
-dy = st.sidebar.number_input("dY (m)", value=669.0, format="%.3f")
-dz = st.sidebar.number_input("dZ (m)", value=-48.0, format="%.3f")
+dx = st.sidebar.number_input("dX (m)", value=596.096, format="%.3f")
+dy = st.sidebar.number_input("dY (m)", value=-624.512, format="%.3f")
+dz = st.sidebar.number_input("dZ (m)", value=2.779, format="%.3f")
 
-# 4. MATH LOGIC: MOLODENSKY + RSO PROJECTION
-# Constants for Everest 1830 (Modified)
-a_tim = 6377298.556
-f_tim = 1 / 300.8017
-e2_tim = 2*f_tim - f_tim**2
+rx_sec = st.sidebar.number_input("rX (arc-sec)", value=-1.446460, format="%.8f")
+ry_sec = st.sidebar.number_input("rY (arc-sec)", value=-0.883120, format="%.8f")
+rz_sec = st.sidebar.number_input("rZ (arc-sec)", value=1.828440, format="%.8f")
+scale_ppm = st.sidebar.number_input("Scale (ppm)", value=-10.454, format="%.8f")
 
-def latlon_to_rso(lat, lon):
-    """
-    Borneo RSO Projection Logic
-    """
-    # Origin Constants for Borneo RSO
-    lat0 = np.radians(4.0)
-    lon0 = np.radians(115.0)
-    k = 0.99984  # Scale factor at origin
-    FE = 0.0     # ADJUSTED: False Easting
-    FN = 0.0     # ADJUSTED: False Northing
-    
+# 4. MATH LOGIC: BURSA-WOLF 7-PARAMETER
+A_WGS = 6378137.0
+F_WGS = 1 / 298.257223563
+E2_WGS = (2 * F_WGS) - (F_WGS ** 2)
+
+def geodetic_to_cartesian(lat, lon, h):
     phi = np.radians(lat)
     lam = np.radians(lon)
-    
-    # Radius of Curvature & Projection Math
-    N = a_tim / np.sqrt(1 - e2_tim * np.sin(phi)**2)
-    T = np.tan(phi)**2
-    C = e2_tim / (1 - e2_tim) * np.cos(phi)**2
-    A = (lam - lon0) * np.cos(phi)
-    
-    # Meridian Distance Math
-    M = a_tim * ((1 - e2_tim/4 - 3*e2_tim**2/64) * phi - (3*e2_tim/8 + 3*e2_tim**2/32) * np.sin(2*phi) + (15*e2_tim**2/256) * np.sin(4*phi))
-    M0 = a_tim * ((1 - e2_tim/4 - 3*e2_tim**2/64) * lat0 - (3*e2_tim/8 + 3*e2_tim**2/32) * np.sin(2*lat0) + (15*e2_tim**2/256) * np.sin(4*lat0))
-    
-    easting = FE + k * N * (A + (1 - T + C) * A**3 / 6 + (5 - 18 * T + T**2 + 72 * C) * A**5 / 120)
-    northing = FN + k * (M - M0 + N * np.tan(phi) * (A**2 / 2 + (5 - T + 9 * C + 4 * C**2) * A**4 / 24))
-    
-    return easting, northing
+    N = A_WGS / np.sqrt(1 - E2_WGS * np.sin(phi)**2)
+    X = (N + h) * np.cos(phi) * np.cos(lam)
+    Y = (N + h) * np.cos(phi) * np.sin(lam)
+    Z = (N * (1 - E2_WGS) + h) * np.sin(phi)
+    return np.array([X, Y, Z])
 
-def molodensky_transform(lat, lon, h, dx, dy, dz):
-    a_wgs = 6378137.0
-    f_wgs = 1 / 298.257223563
-    da = a_tim - a_wgs
-    df = f_tim - f_wgs
-    phi = np.radians(lat)
-    lam = np.radians(lon)
-    e2w = 2*f_wgs - f_wgs**2
-    M = a_wgs * (1 - e2w) / (1 - e2w * np.sin(phi)**2)**1.5
-    N = a_wgs / np.sqrt(1 - e2w * np.sin(phi)**2)
-    dphi = (-dx*np.sin(phi)*np.cos(lam) - dy*np.sin(phi)*np.sin(lam) + dz*np.cos(phi) + (a_wgs*df + f_wgs*da)*np.sin(2*phi)) / (M + h)
-    dlam = (-dx*np.sin(lam) + dy*np.cos(lam)) / ((N + h) * np.cos(phi))
-    return lat + np.degrees(dphi), lon + np.degrees(dlam)
+def bursa_wolf_transform(P_wgs, dx, dy, dz, rx, ry, rz, s_ppm):
+    T = np.array([dx, dy, dz])
+    S = 1 + (s_ppm / 1000000)
+    rx_rad = np.radians(rx / 3600)
+    ry_rad = np.radians(ry / 3600)
+    rz_rad = np.radians(rz / 3600)
+    # Coordinate Frame Rotation Matrix
+    R = np.array([
+        [1, rz_rad, -ry_rad],
+        [-rz_rad, 1, rx_rad],
+        [ry_rad, -rx_rad, 1]
+    ])
+    return T + S * (R @ P_wgs)
 
 # 5. MAIN CONTENT
-st.title("🛰️ Coordinate Transformation Module")
+st.title("🛰️ 7-Parameter Transformation module")
 st.markdown("### Geomatics Creative Map and Innovation Competition 2026")
-st.markdown("<h4 style='color: #4682B4; font-weight: bold;'>WGS84 Geodetic ➔ Timbalai 1948 RSO (Borneo)</h4>", unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
+# Use Session State to keep the map and results visible
+if 'processed' not in st.session_state:
+    st.session_state.processed = False
+
+col1, col2 = st.columns([1, 1])
 with col1:
     st.subheader("📥 Input: WGS84")
-    lat_in = st.number_input("Latitude (Degrees)", value=5.57340882, format="%.8f")
-    lon_in = st.number_input("Longitude (Degrees)", value=116.03575158, format="%.8f")
-    h_in = st.number_input("Height (m)", value=48.502, format="%.3f")
+    lat = st.number_input("Latitude", value=5.573408816, format="%.8f")
+    lon = st.number_input("Longitude", value=116.035751582, format="%.8f")
+    h = st.number_input("Height (m)", value=48.502, format="%.3f")
     
-    if st.button("🚀 Calculate Easting & Northing"):
-        with col2:
-            st.subheader("📤 Output: Borneo RSO")
-            # Step 1: Shift Datum to Timbalai
-            lat_t, lon_t = molodensky_transform(lat_in, lon_in, h_in, dx, dy, dz)
-            # Step 2: Project to Easting/Northing
-            e, n = latlon_to_rso(lat_t, lon_t)
-            
-            st.success("Transformation Successful!")
-            st.metric("Easting (E)", f"{e:.3f} m")
-            st.metric("Northing (N)", f"{n:.3f} m")
-            st.info(f"Target Geodetic: {lat_t:.6f}, {lon_t:.6f}")
-            st.balloons()
+    if st.button("🚀 Transform & Map"):
+        st.session_state.P_wgs = geodetic_to_cartesian(lat, lon, h)
+        st.session_state.P_tim = bursa_wolf_transform(st.session_state.P_wgs, dx, dy, dz, rx_sec, ry_sec, rz_sec, scale_ppm)
+        st.session_state.lat = lat
+        st.session_state.lon = lon
+        st.session_state.processed = True
 
-# 6. THEORY
+with col2:
+    if st.session_state.processed:
+        st.subheader("📤 Output: Cartesian")
+        st.success("Calculated!")
+        st.metric("Timbalai X (m)", f"{st.session_state.P_tim[0]:.3f}")
+        st.metric("Timbalai Y (m)", f"{st.session_state.P_tim[1]:.3f}")
+        st.metric("Timbalai Z (m)", f"{st.session_state.P_tim[2]:.3f}")
+        st.balloons()
+
+# Dedicated Map Section below to prevent blank boxes
+if st.session_state.processed:
+    st.divider()
+    st.subheader("🗺️ Visual Verification")
+    m = folium.Map(location=[st.session_state.lat, st.session_state.lon], zoom_start=15)
+    folium.Marker([st.session_state.lat, st.session_state.lon], popup="Input Location").add_to(m)
+    # use_container_width ensures the map fills the space and removes blank boxes
+    st_folium(m, use_container_width=True, height=400)
+
+# 6. THEORY ELABORATION
 st.divider()
-with st.expander("📖 View Mathematical Process"):
-    st.write("WGS84 Geodetic ➔ Molodensky Datum Shift ➔ Borneo RSO Projection (FE=0, FN=0).")
-    
-    st.latex(r'''E = FE + k N [A + (1 - T + C) \frac{A^3}{6} + ...]''')
+with st.expander("📖 View Mathematical Model & Elaboration"):
+    st.latex(r'''\mathbf{X}_{Local} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}''')
+    st.markdown("""
+    | Component | Elaboration |
+    | :--- | :--- |
+    | **dX, dY, dZ** | **Translation:** Adjusts the origin between datums. |
+    | **rX, rY, rZ** | **Rotation:** Corrects axial misalignment in arc-seconds. |
+    | **S (Scale)** | **Scale Factor:** Compensates for size distortion (ppm). |
+    """)
 
-# 7. FOOTER
+# 7. DEVELOPER CREDITS
+# Fixed: Proper string literal formatting to prevent SyntaxError
 st.markdown(
     """
     <style>
@@ -149,11 +158,7 @@ st.markdown(
     </style>
     <div class="footer-box">
         <div class="group-title">DEVELOPED BY:</div>
-        <p class="footer-text">1. Weil W.</p>
-        <p class="footer-text">2. Rebecca J.</p>
-        <p class="footer-text">3. Achellis L.</p>
-        <p class="footer-text">4. Nor Muhamad</p>
-        <p class="footer-text">5. Rowell B.S.</p>
+        <p class="footer-text">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p>
         <p class="footer-text" style="margin-top:5px; color: #800000;"><b>SBEU 3893 - UTM</b></p>
     </div>
     """, unsafe_allow_html=True
