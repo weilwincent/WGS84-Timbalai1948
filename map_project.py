@@ -90,4 +90,48 @@ col_in, col_out = st.columns(2)
 with col_in:
     st.subheader("📥 Input: WGS84")
     lat_in = st.number_input("Latitude", value=5.573408816, format="%.9f")
-    lon_in = st.number
+    lon_in = st.number_input("Longitude", value=116.035751582, format="%.9f")
+    h_in = st.number_input("Height (m)", value=48.502, format="%.3f")
+    
+    if st.button("🚀 Transform"):
+        st.session_state.balloons_fired = False 
+        lat_t, lon_t = horizontal_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
+        # Height is kept exactly as h_in
+        st.session_state.results = {"lat_t": lat_t, "lon_t": lon_t, "h_t": h_in, "lat_orig": lat_in, "lon_orig": lon_in}
+
+with col_out:
+    if st.session_state.results:
+        st.subheader("📤 Output: Timbalai 1948")
+        st.metric("Latitude", f"{st.session_state.results['lat_t']:.9f}°")
+        st.metric("Longitude", f"{st.session_state.results['lon_t']:.9f}°")
+        st.metric("Height (m)", f"{st.session_state.results['h_t']:.3f} (Maintained)")
+        
+        if not st.session_state.balloons_fired:
+            st.balloons()
+            st.session_state.balloons_fired = True
+
+# 7. MATHEMATICAL FORMULAS
+st.divider()
+st.subheader("📖 Mathematical Principles")
+with st.expander("View Transformation Logic", expanded=True):
+    st.write("This module performs a 7-parameter Bursa-Wolf shift in Cartesian space to find the new Horizontal position, while preserving the original input height.")
+    
+
+# 8. MAP ROW
+if st.session_state.results:
+    st.divider()
+    st.subheader("🗺️ Visual Verification")
+    m = folium.Map(location=[st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], zoom_start=15)
+    folium.Marker([st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], popup="Survey Point").add_to(m)
+    st_folium(m, use_container_width=True, height=400)
+
+# 9. FOOTER
+st.markdown("""
+    <div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; 
+    background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; 
+    border-radius: 8px; z-index: 1000;">
+        <p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p>
+        <p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p>
+        <p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p>
+    </div>
+    """, unsafe_allow_html=True)
