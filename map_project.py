@@ -90,4 +90,51 @@ with col_in:
     st.subheader("📥 Input: WGS84")
     lat_in = st.number_input("Latitude", value=5.5734, format="%.9f")
     lon_in = st.number_input("Longitude", value=116.0357, format="%.9f")
-    h_in = st.number_input("Height (m)", value=4
+    h_in = st.number_input("Height (m)", value=48.5)
+    
+    if st.button("🚀 Transform & Map"):
+        st.session_state.balloons_fired = False 
+        lat_t, lon_t = helmert_to_gdm2000(lat_in, lon_in, h_in, dx, dy, dz)
+        east, north = latlon_to_borneo_rso(lat_t, lon_t)
+        st.session_state.results = {
+            "lat_dms": decimal_to_dms(lat_t, True),
+            "lon_dms": decimal_to_dms(lon_t, False),
+            "east": east, "north": north,
+            "lat_orig": lat_in, "lon_orig": lon_in
+        }
+
+with col_out:
+    if st.session_state.results:
+        st.subheader("📤 Output: Grid & Geodetic")
+        st.markdown(f"""
+            <div class="result-card">
+                <div class="result-label">BORNEO RSO (METRIC)</div>
+                <div class="result-value">EAST: {st.session_state.results['east']:.3f} m<br>NORTH: {st.session_state.results['north']:.3f} m</div>
+            </div>
+            <div class="result-card">
+                <div class="result-label">GDM2000 (DMS)</div>
+                <div class="result-value">LAT: {st.session_state.results['lat_dms']}<br>LON: {st.session_state.results['lon_dms']}</div>
+            </div>
+        """, unsafe_allow_html=True)
+        if not st.session_state.balloons_fired:
+            st.balloons(); st.session_state.balloons_fired = True
+
+# 8. MAP (FIXED)
+if st.session_state.results:
+    st.divider()
+    st.subheader("🗺️ Visual Verification")
+    m = folium.Map(location=[st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], 
+                   zoom_start=15, control_scale=True)
+    
+    # Custom Marker Icon
+    folium.Marker(
+        [st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], 
+        popup=f"East: {st.session_state.results['east']:.2f}",
+        icon=folium.Icon(color='blue', icon='info-sign')
+    ).add_to(m)
+    
+    # Using a unique key for the map ensures it doesn't disappear on rerun
+    st_folium(m, use_container_width=True, height=450, key="survey_map_v1")
+
+# 9. FOOTER
+st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
