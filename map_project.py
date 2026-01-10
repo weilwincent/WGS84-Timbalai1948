@@ -114,4 +114,57 @@ dx = st.sidebar.number_input("dX (m)", value=0.000, format="%.3f")
 dy = st.sidebar.number_input("dY (m)", value=0.000, format="%.3f")
 dz = st.sidebar.number_input("dZ (m)", value=0.000, format="%.3f")
 rx_s = st.sidebar.number_input("rX (sec)", value=0.0000, format="%.4f")
-ry_s = st.sidebar.number_input("r
+ry_s = st.sidebar.number_input("rY (sec)", value=0.0000, format="%.4f")
+rz_s = st.sidebar.number_input("rZ (sec)", value=0.0000, format="%.4f")
+scale = st.sidebar.number_input("Scale (ppm)", value=0.000, format="%.3f")
+
+# 7. MAIN UI
+st.title("🛰️ Borneo RSO Module (Everest 1830)")
+st.write("WGS84 ➔ Timbalai/MRT ➔ Borneo RSO Grid")
+
+col1, col2 = st.columns(2)
+with col1:
+    st.subheader("📥 Input: WGS84")
+    lat_in = st.number_input("Latitude", value=5.9804, format="%.8f")
+    lon_in = st.number_input("Longitude", value=116.0734, format="%.9f")
+    h_in = st.number_input("Height (m)", value=25.0)
+    
+    if st.button("🚀 Transform & Calculate"):
+        lat_l, lon_l, east, north, cart = full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale)
+        st.session_state.results = {
+            "dms_lat": decimal_to_dms(lat_l), "dms_lon": decimal_to_dms(lon_l, False),
+            "east": east, "north": north, "cart": cart,
+            "orig_lat": lat_in, "orig_lon": lon_in
+        }
+
+with col2:
+    if st.session_state.results:
+        st.subheader("📤 Output: Grid & Cartesian")
+        st.markdown(f"""
+            <div class="result-card">
+                <div class="result-label">BORNEO RSO GRID (EVEREST)</div>
+                <div class="result-value">EAST: {st.session_state.results['east']:.3f} m<br>NORTH: {st.session_state.results['north']:.3f} m</div>
+            </div>
+            <div class="result-card">
+                <div class="result-label">3D CARTESIAN (X, Y, Z)</div>
+                <div class="result-value">X: {st.session_state.results['cart'][0]:.3f} m<br>Y: {st.session_state.results['cart'][1]:.3f} m<br>Z: {st.session_state.results['cart'][2]:.3f} m</div>
+            </div>
+        """, unsafe_allow_html=True)
+        st.balloons()
+
+# 8. MAP
+if st.session_state.results:
+    st.divider()
+    m = folium.Map(location=[st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], zoom_start=15)
+    folium.Marker([st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], popup="Calculated Point").add_to(m)
+    st_folium(m, use_container_width=True, height=400, key="borneo_everest_map")
+
+# 9. MATHEMATICAL FORMULAS
+st.divider()
+st.subheader("📖 Mathematical Principles")
+with st.expander("View Logic & Parameters"):
+    st.write(f"**Current Ellipsoid (Everest 1830):** a = {6377298.556}, 1/f = {300.8017}")
+    st.latex(r"E = v \cos \gamma_0 + u \sin \gamma_0 + E_0, \quad N = u \cos \gamma_0 - v \sin \gamma_0 + N_0")
+
+# 10. FOOTER
+st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
