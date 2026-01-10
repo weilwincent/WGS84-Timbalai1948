@@ -36,9 +36,9 @@ def decimal_to_dms(deg, is_lat=True):
     direction = ("N" if deg >= 0 else "S") if is_lat else ("E" if deg >= 0 else "W")
     return f"{d}° {m:02d}' {s:07.4f}\" {direction}"
 
-# 4. RSO ENGINE (Borneo RSO with Everest 1830)
+# 4. RSO ENGINE (Everest 1830 + Zero False Origin)
 def latlon_to_borneo_rso(phi, lam):
-    # Applied User Corrections
+    # Parameter Everest 1830 (Correction Applied)
     a = 6377298.556                 
     inv_f = 300.8017
     f = 1 / inv_f
@@ -48,9 +48,9 @@ def latlon_to_borneo_rso(phi, lam):
     lam0 = np.radians(115.0)        
     gamma0 = np.radians(18.745783)  
     
-    # Standard Sabah Grid Offsets
-    E0 = 590476.66                  
-    N0 = 442857.65                  
+    # FALSE ORIGIN SET TO ZERO
+    E0 = 0.0                        
+    N0 = 0.0                        
 
     e2 = 2*f - f**2
     e = np.sqrt(e2)
@@ -64,12 +64,15 @@ def latlon_to_borneo_rso(phi, lam):
     L = np.log(H / (t**B))
     u = (A / B) * np.arctan2(np.sinh(L), np.cos(B * (lam - lam0)))
     v = (A / B) * np.arctanh(np.sin(B * (lam - lam0)) / np.cosh(L))
+    
+    # Rectification Rotation
     east = v * np.cos(gamma0) + u * np.sin(gamma0) + E0
     north = u * np.cos(gamma0) - v * np.sin(gamma0) + N0
     return east, north
 
 # 5. TRANSFORMATION ENGINE
 def full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
+    # WGS84 to Cartesian
     a_w, f_w = 6378137.0, 1/298.257223563
     e2_w = 2*f_w - f_w**2
     phi, lam = np.radians(lat_in), np.radians(lon_in)
@@ -77,57 +80,66 @@ def full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, s_pp
     Xw = (N_w + h_in) * np.cos(phi) * np.cos(lam)
     Yw = (N_w + h_in) * np.cos(phi) * np.sin(lam)
     Zw = (N_w * (1 - e2_w) + h_in) * np.sin(phi)
+    
     T = np.array([dx, dy, dz]); S = 1 + (s_ppm / 1000000)
     rx, ry, rz = np.radians(rx_s/3600), np.radians(ry_s/3600), np.radians(rz_s/3600)
     R = np.array([[1, rz, -ry], [-rz, 1, rx], [ry, -rx, 1]])
     P_local = T + S * (R @ np.array([Xw, Yw, Zw]))
-    a_e = 6377298.556
-    f_e = 1 / 300.8017
+    
+    # Cartesian to Everest Geodetic
+    a_e, f_e = 6377298.556, 1 / 300.8017
     e2_e = 2*f_e - f_e**2
     x, y, z = P_local
     lon_l = np.arctan2(y, x); p = np.sqrt(x**2 + y**2); phi_l = np.arctan2(z, p * (1 - e2_e))
     for _ in range(5):
         N_e = a_e / np.sqrt(1 - e2_e * np.sin(phi_l)**2)
         phi_l = np.arctan2(z + e2_e * N_e * np.sin(phi_l), p)
+        
     east, north = latlon_to_borneo_rso(phi_l, lon_l)
     return np.degrees(phi_l), np.degrees(lon_l), east, north, P_local
 
-# 6. SIDEBAR (DEFAULT PARAMETERS)
+# 6. SIDEBAR
 if 'results' not in st.session_state: st.session_state.results = None
-if os.path.exists("utm.png"): st.sidebar.image("utm.png", use_container_width=True)
-st.sidebar.title("⚙️ RSO Parameters")
+st.sidebar.title("⚙️ Shift Parameters")
 dx = st.sidebar.number_input("dX (m)", value=0.000, format="%.3f")
 dy = st.sidebar.number_input("dY (m)", value=0.000, format="%.3f")
 dz = st.sidebar.number_input("dZ (m)", value=0.000, format="%.3f")
-rx_s = st.sidebar.number_input("rX (sec)", value=0.000000, format="%.6f")
-ry_s = st.sidebar.number_input("rY (sec)", value=0.000000, format="%.6f")
-rz_s = st.sidebar.number_input("rZ (sec)", value=0.000000, format="%.6f")
-scale = st.sidebar.number_input("Scale (ppm)", value=0.0000, format="%.4f")
+rx_s = st.sidebar.number_input("rX (sec)", value=0.0000, format="%.4f")
+ry_s = st.sidebar.number_input("rY (sec)", value=0.0000, format="%.4f")
+rz_s = st.sidebar.number_input("rZ (sec)", value=0.0000, format="%.4f")
+scale = st.sidebar.number_input("Scale (ppm)", value=0.000, format="%.3f")
 
 # 7. MAIN UI
 st.title("🛰️ Borneo RSO & Cartesian Module")
-st.write("WGS84 ➔ Timbalai ➔ Borneo RSO & Cartesian XYZ")
+st.write("WGS84 ➔ Timbalai (Everest 1830) ➔ Borneo RSO & Cartesian")
 
 col1, col2 = st.columns(2)
 with col1:
     st.subheader("📥 Input: WGS84")
-    lat_in = st.number_input("Latitude", value=5.9804, format="%.9f")
+    lat_in = st.number_input("Latitude", value=5.9804, format="%.8f")
     lon_in = st.number_input("Longitude", value=116.0734, format="%.9f")
     h_in = st.number_input("Height (m)", value=25.0)
-    if st.button("🚀 Transform & Map"):
+    
+    if st.button("🚀 Calculate Results"):
         lat_l, lon_l, east, north, cart = full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale)
         st.session_state.results = {
             "dms_lat": decimal_to_dms(lat_l), "dms_lon": decimal_to_dms(lon_l, False),
-            "east": east, "north": north, "cart": cart, "orig_lat": lat_in, "orig_lon": lon_in
+            "east": east, "north": north, "cart": cart,
+            "orig_lat": lat_in, "orig_lon": lon_in
         }
 
 with col2:
     if st.session_state.results:
-        st.subheader("📤 Output: Grid & 3D Cartesian")
+        st.subheader("📤 Output: Grid & Cartesian")
         st.markdown(f"""
-            <div class="result-card"><div class="result-label">BORNEO RSO (GRID)</div><div class="result-value">EAST: {st.session_state.results['east']:.3f} m<br>NORTH: {st.session_state.results['north']:.3f} m</div></div>
-            <div class="result-card"><div class="result-label">3D CARTESIAN (X, Y, Z)</div><div class="result-value">X: {st.session_state.results['cart'][0]:.3f} m<br>Y: {st.session_state.results['cart'][1]:.3f} m<br>Z: {st.session_state.results['cart'][2]:.3f} m</div></div>
-            <div class="result-card"><div class="result-label">GEODETIC (DMS)</div><div class="result-value">LAT: {st.session_state.results['dms_lat']}<br>LON: {st.session_state.results['dms_lon']}</div></div>
+            <div class="result-card">
+                <div class="result-label">BORNEO RSO (E0=0, N0=0)</div>
+                <div class="result-value">EAST: {st.session_state.results['east']:.3f} m<br>NORTH: {st.session_state.results['north']:.3f} m</div>
+            </div>
+            <div class="result-card">
+                <div class="result-label">3D CARTESIAN (X, Y, Z)</div>
+                <div class="result-value">X: {st.session_state.results['cart'][0]:.3f} m<br>Y: {st.session_state.results['cart'][1]:.3f} m<br>Z: {st.session_state.results['cart'][2]:.3f} m</div>
+            </div>
         """, unsafe_allow_html=True)
         st.balloons()
 
@@ -136,17 +148,18 @@ if st.session_state.results:
     st.divider()
     st.subheader("🗺️ Visual Verification")
     m = folium.Map(location=[st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], zoom_start=15)
-    folium.Marker([st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], popup="Survey Point").add_to(m)
-    st_folium(m, use_container_width=True, height=450, key="borneo_final_map")
+    folium.Marker([st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], popup="Calculated Point").add_to(m)
+    st_folium(m, use_container_width=True, height=400, key="borneo_zero_map")
 
 # 9. MATHEMATICAL PRINCIPLES
 st.divider()
 st.subheader("📖 Mathematical Principles")
-with st.expander("View Formulas & Logic", expanded=True):
-    st.write(f"**Applied Corrections (Everest 1830):** a = {6377298.556}, 1/f = {300.8017}")
+with st.expander("View Logic & Parameters", expanded=True):
+    st.write(f"**Ellipsoid:** Everest 1830 ($a = 6377298.556$, $1/f = 300.8017$)")
+    st.write("**Hotine Oblique Mercator (Zero False Origin)**")
+    st.latex(r"E = v \cos \gamma_0 + u \sin \gamma_0, \quad N = u \cos \gamma_0 - v \sin \gamma_0")
+    st.write("**Helmert 7-Parameter Transformation**")
     st.latex(r"\mathbf{X}_{Local} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
-    st.write("**Borneo RSO (Hotine Oblique Mercator) Grid**")
-    st.latex(r"E = v \cos \gamma_0 + u \sin \gamma_0 + E_0, \quad N = u \cos \gamma_0 - v \sin \gamma_0 + N_0")
 
 # 10. FOOTER
 st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
