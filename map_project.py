@@ -129,4 +129,10 @@ if st.session_state.results:
     m = folium.Map(location=[st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], zoom_start=15)
     folium.Marker(
         [st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], 
-        popup=f"E: {st.session_state.results['east']
+        popup=f"E: {st.session_state.results['east']:.2f}",
+        icon=folium.Icon(color='blue', icon='screenshot', prefix='fa')
+    ).add_to(m)
+    st_folium(m, use_container_width=True, height=450, key="borneo_final_map")
+
+# 9. FOOTER
+st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
