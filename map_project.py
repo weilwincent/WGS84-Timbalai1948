@@ -36,7 +36,7 @@ def decimal_to_dms(deg, is_lat=True):
     direction = ("N" if deg >= 0 else "S") if is_lat else ("E" if deg >= 0 else "W")
     return f"{d}° {m:02d}' {s:07.4f}\" {direction}"
 
-# 4. RSO ENGINE (Calibrated with User Offsets)
+# 4. RSO ENGINE (Borneo RSO)
 def latlon_to_borneo_rso(phi, lam):
     a = 6378137.0                   # GRS80 (GDM2000)
     f = 1/298.257222101
@@ -45,32 +45,24 @@ def latlon_to_borneo_rso(phi, lam):
     lam0 = np.radians(115.0)        
     gamma0 = np.radians(18.745783)  
     
-    # CALIBRATED OFFSETS
+    # Official Sabah Grid Offsets
     E0 = 707496.724                        
     N0 = 660060.126                        
 
     e2 = 2*f - f**2
     e = np.sqrt(e2)
-
     B = np.sqrt(1 + (e2 * np.cos(phi0)**4) / (1 - e2))
     A = a * B * k0 * np.sqrt(1 - e2) / (1 - e2 * np.sin(phi0)**2)
-    
     t = np.tan(np.pi/4 - phi/2) / ((1 - e * np.sin(phi)) / (1 + e * np.sin(phi)))**(e/2)
     t0 = np.tan(np.pi/4 - phi0/2) / ((1 - e * np.sin(phi0)) / (1 + e * np.sin(phi0)))**(e/2)
-    
     D = B * np.sqrt(1 - e2) / (np.cos(phi0) * np.sqrt(1 - e2 * np.sin(phi0)**2))
     F = D + np.sqrt(max(0, D**2 - 1))
-    if phi0 < 0: F = D - np.sqrt(max(0, D**2 - 1))
     H = F * (t0**B)
     L = np.log(H / (t**B))
-    
     u = (A / B) * np.arctan2(np.sinh(L), np.cos(B * (lam - lam0)))
     v = (A / B) * np.arctanh(np.sin(B * (lam - lam0)) / np.cosh(L))
-    
-    # Rectification Rotation
     east = v * np.cos(gamma0) + u * np.sin(gamma0) + E0
     north = u * np.cos(gamma0) - v * np.sin(gamma0) + N0
-    
     return east, north
 
 # 5. TRANSFORMATION ENGINE
@@ -82,13 +74,10 @@ def full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, s_pp
     Xw = (N_w + h_in) * np.cos(phi) * np.cos(lam)
     Yw = (N_w + h_in) * np.cos(phi) * np.sin(lam)
     Zw = (N_w * (1 - e2_w) + h_in) * np.sin(phi)
-    
-    T = np.array([dx, dy, dz])
-    S = 1 + (s_ppm / 1000000)
+    T = np.array([dx, dy, dz]); S = 1 + (s_ppm / 1000000)
     rx, ry, rz = np.radians(rx_s/3600), np.radians(ry_s/3600), np.radians(rz_s/3600)
     R = np.array([[1, rz, -ry], [-rz, 1, rx], [ry, -rx, 1]])
     P_gdm = T + S * (R @ np.array([Xw, Yw, Zw]))
-    
     a_g, f_g = 6378137.0, 1/298.257222101
     e2_g = 2*f_g - f_g**2
     x, y, z = P_gdm
@@ -96,7 +85,6 @@ def full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, s_pp
     for _ in range(5):
         N_g = a_g / np.sqrt(1 - e2_g * np.sin(phi_g)**2)
         phi_g = np.arctan2(z + e2_g * N_g * np.sin(phi_g), p)
-    
     east, north = latlon_to_borneo_rso(phi_g, lon_g)
     return np.degrees(phi_g), np.degrees(lon_g), east, north, P_gdm
 
@@ -125,10 +113,8 @@ with col1:
     if st.button("🚀 Transform & Map"):
         lat_g, lon_g, east, north, cart = full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale)
         st.session_state.results = {
-            "dms_lat": decimal_to_dms(lat_g), 
-            "dms_lon": decimal_to_dms(lon_g, False),
-            "east": east, "north": north, "cart": cart, 
-            "orig_lat": lat_in, "orig_lon": lon_in
+            "dms_lat": decimal_to_dms(lat_g), "dms_lon": decimal_to_dms(lon_g, False),
+            "east": east, "north": north, "cart": cart, "orig_lat": lat_in, "orig_lon": lon_in
         }
 
 with col2:
@@ -146,25 +132,18 @@ if st.session_state.results:
     st.divider()
     st.subheader("🗺️ Visual Verification")
     m = folium.Map(location=[st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], zoom_start=15)
-    folium.Marker(
-        [st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], 
-        popup=f"East: {st.session_state.results['east']:.2f}",
-        icon=folium.Icon(color='blue', icon='screenshot', prefix='fa')
-    ).add_to(m)
-    st_folium(m, use_container_width=True, height=450, key="borneo_sabah_grid_map")
+    folium.Marker([st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], popup="Survey Point").add_to(m)
+    st_folium(m, use_container_width=True, height=450, key="borneo_final_map")
 
 # 9. MATHEMATICAL PRINCIPLES
 st.divider()
 st.subheader("📖 Mathematical Principles")
-
 with st.expander("View Formulas & Logic", expanded=True):
     st.write("**1. Helmert 7-Parameter Transformation**")
     st.latex(r"\mathbf{X}_{GDM} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
-    
     st.write("**2. Borneo RSO (Hotine Oblique Mercator) Grid**")
     st.latex(r"E = v \cos \gamma_0 + u \sin \gamma_0 + E_0, \quad N = u \cos \gamma_0 - v \sin \gamma_0 + N_0")
     st.write(f"Parameters: $E_0 = {707496.724}$, $N_0 = {660060.126}$")
-    
 
 # 10. FOOTER
 st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
