@@ -144,4 +144,24 @@ with col_out:
             </div>
         """, unsafe_allow_html=True)
         
-        st.metric("Height (m)", f
+        st.metric("Height (m)", f"{st.session_state.results['h_t']:.3f} (Maintained)")
+        
+        if not st.session_state.balloons_fired:
+            st.balloons()
+            st.session_state.balloons_fired = True
+
+# 8. MAP ROW
+if st.session_state.results:
+    st.divider()
+    st.subheader("🗺️ Visual Verification")
+    m = folium.Map(location=[st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], zoom_start=15)
+    folium.Marker([st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], popup="Survey Point").add_to(m)
+    st_folium(m, use_container_width=True, height=400, key="survey_map_fixed")
+
+# 9. MATHEMATICAL PRINCIPLES
+st.divider()
+with st.expander("📖 View Mathematical Model"):
+    st.latex(r"\mathbf{X}_{Local} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
+
+# 10. FOOTER
+st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
