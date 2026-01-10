@@ -130,17 +130,17 @@ with col2:
 # 8. MATHEMATICAL FORMULAS (BOTTOM SECTION)
 st.divider()
 st.subheader("📖 Mathematical Principles")
-[Image of geodetic datum shift using Molodensky transformation]
+
 with st.expander("View Formulas & Logic", expanded=True):
     st.write("**1. Helmert 7-Parameter Transformation**")
     st.latex(r"\mathbf{X}_{GDM} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
-    [Image of Bursa-Wolf 7-parameter transformation showing translation, rotation, and scale factors]
+    
     st.write("**2. Geodetic to Cartesian Conversion**")
     st.latex(r"X = (N+h) \cos \phi \cos \lambda, \quad Y = (N+h) \cos \phi \sin \lambda, \quad Z = [N(1-e^2)+h] \sin \phi")
-    [Image of Geocentric Cartesian vs Geodetic coordinates]
+    
     st.write("**3. Borneo RSO (Hotine Oblique Mercator) Grid**")
     st.latex(r"E = v \cos \gamma_0 + u \sin \gamma_0 + E_0, \quad N = u \cos \gamma_0 - v \sin \gamma_0 + N_0")
-    [Image of the rectified skew orthomorphic (RSO) projection map of Borneo]
+    
 
 # 9. FOOTER
-st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBE
+st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
