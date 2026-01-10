@@ -38,7 +38,7 @@ def decimal_to_dms(deg, is_lat=True):
 
 # 4. RSO ENGINE (Calibrated with Everest 1830)
 def latlon_to_borneo_rso(phi, lam):
-    # --- UPDATED PARAMETERS (Everest 1830) ---
+    # --- APPLIED USER CORRECTIONS ---
     a = 6377298.556                 
     inv_f = 300.8017
     f = 1 / inv_f
@@ -48,7 +48,7 @@ def latlon_to_borneo_rso(phi, lam):
     lam0 = np.radians(115.0)        
     gamma0 = np.radians(18.745783)  
     
-    # Official Sabah/Sarawak Offsets
+    # Official Grid Offsets
     E0 = 590476.66                  
     N0 = 442857.65                  
 
@@ -105,11 +105,9 @@ def full_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, s_pp
     east, north = latlon_to_borneo_rso(phi_l, lon_l)
     return np.degrees(phi_l), np.degrees(lon_l), east, north, P_local
 
-# 6. SIDEBAR
+# 6. SIDEBAR (DEFAULT PARAMETERS)
 if 'results' not in st.session_state: st.session_state.results = None
-if os.path.exists("utm.png"): st.sidebar.image("utm.png", use_container_width=True)
 st.sidebar.title("⚙️ Shift Parameters")
-# Jika menggunakan Everest, anda mungkin perlu dx, dy, dz yang lebih besar (Standard: 596, -624, 2)
 dx = st.sidebar.number_input("dX (m)", value=0.000, format="%.3f")
 dy = st.sidebar.number_input("dY (m)", value=0.000, format="%.3f")
 dz = st.sidebar.number_input("dZ (m)", value=0.000, format="%.3f")
@@ -119,8 +117,8 @@ rz_s = st.sidebar.number_input("rZ (sec)", value=0.0000, format="%.4f")
 scale = st.sidebar.number_input("Scale (ppm)", value=0.000, format="%.3f")
 
 # 7. MAIN UI
-st.title("🛰️ Borneo RSO Module (Everest 1830)")
-st.write("WGS84 ➔ Timbalai/MRT ➔ Borneo RSO Grid")
+st.title("🛰️ Borneo RSO & Cartesian Module")
+st.write("WGS84 ➔ Timbalai ➔ Borneo RSO & Cartesian XYZ")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -155,6 +153,7 @@ with col2:
 # 8. MAP
 if st.session_state.results:
     st.divider()
+    st.subheader("🗺️ Visual Verification")
     m = folium.Map(location=[st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], zoom_start=15)
     folium.Marker([st.session_state.results['orig_lat'], st.session_state.results['orig_lon']], popup="Calculated Point").add_to(m)
     st_folium(m, use_container_width=True, height=400, key="borneo_everest_map")
@@ -162,9 +161,14 @@ if st.session_state.results:
 # 9. MATHEMATICAL FORMULAS
 st.divider()
 st.subheader("📖 Mathematical Principles")
-with st.expander("View Logic & Parameters"):
-    st.write(f"**Current Ellipsoid (Everest 1830):** a = {6377298.556}, 1/f = {300.8017}")
+[Image of the geometry of an ellipsoid including semi-major and semi-minor axes]
+with st.expander("View Logic & Parameters", expanded=True):
+    st.write(f"**Applied Corrections (Everest 1830):** a = {6377298.556}, 1/f = {300.8017}")
     st.latex(r"E = v \cos \gamma_0 + u \sin \gamma_0 + E_0, \quad N = u \cos \gamma_0 - v \sin \gamma_0 + N_0")
+    [Image of the rectified skew orthomorphic (RSO) projection map of Borneo]
+    st.write("**Helmert 7-Parameter Transformation**")
+    st.latex(r"\mathbf{X}_{Local} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
+    [Image of Bursa-Wolf 7-parameter transformation showing translation, rotation, and scale factors]
 
 # 10. FOOTER
 st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
