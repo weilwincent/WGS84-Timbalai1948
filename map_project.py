@@ -6,9 +6,9 @@ import base64
 import os
 
 # 1. PAGE SETUP
-st.set_page_config(page_title="SBEU 3893 - Geomatics Suite", page_icon="📍", layout="wide")
+st.set_page_config(page_title="SBEU 3893 - GDM2000 Module", page_icon="📍", layout="wide")
 
-# 2. CUSTOM STYLING (Original Steel Blue + Readable Cards)
+# 2. CUSTOM STYLING
 def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
@@ -19,18 +19,9 @@ def set_bg_local(main_bg):
             [data-testid="stSidebar"] {{ background-color: #4682B4 !important; }}
             [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] p {{ color: white !important; }}
             .main .block-container {{ background-color: rgba(255, 255, 255, 0.95); padding: 2rem; border-radius: 20px; border: 1px solid #ddd; }}
-            
-            /* High-Readability Output Cards */
-            .result-card {{
-                background-color: #f0f8ff;
-                padding: 15px;
-                border-radius: 10px;
-                border-left: 5px solid #4682B4;
-                margin-bottom: 10px;
-            }}
+            .result-card {{ background-color: #f0f8ff; padding: 15px; border-radius: 10px; border-left: 5px solid #4682B4; margin-bottom: 10px; }}
             .result-label {{ color: #4682B4; font-weight: bold; font-size: 14px; margin-bottom: 5px; }}
-            .result-value {{ color: #333; font-size: 20px; font-family: 'Courier New', monospace; font-weight: bold; }}
-            
+            .result-value {{ color: #333; font-size: 18px; font-family: 'Courier New', monospace; font-weight: bold; }}
             iframe {{ width: 100% !important; border-radius: 10px; }}
             </style>
             """, unsafe_allow_html=True)
@@ -47,37 +38,39 @@ def decimal_to_dms(deg, is_lat=True):
     direction = ("N" if deg >= 0 else "S") if is_lat else ("E" if deg >= 0 else "W")
     return f"{d}° {m:02d}' {s:07.4f}\" {direction}"
 
-# 4. MATH ENGINE: HELMERT 7-PARAMETER
+# 4. MATH ENGINE: HELMERT (WGS84 to GDM2000)
 def helmert_transformation(lat, lon, h, dx, dy, dz, rx_s, ry_s, rz_s, s_ppm):
+    # WGS84 Constants
     a_w, f_w = 6378137.0, 1/298.257223563
     e2_w = (2*f_w) - (f_w**2)
     
-    # Geodetic to Cartesian
     phi, lam = np.radians(lat), np.radians(lon)
     N_w = a_w / np.sqrt(1 - e2_w * np.sin(phi)**2)
     Xw = (N_w + h) * np.cos(phi) * np.cos(lam)
     Yw = (N_w + h) * np.cos(phi) * np.sin(lam)
     Zw = (N_w * (1 - e2_w) + h) * np.sin(phi)
     
-    # Helmert Transformation
+    # Transformation to Local Cartesian
     T = np.array([dx, dy, dz])
     S = 1 + (s_ppm / 1000000)
     rx, ry, rz = np.radians(rx_s/3600), np.radians(ry_s/3600), np.radians(rz_s/3600)
     R = np.array([[1, rz, -ry], [-rz, 1, rx], [ry, -rx, 1]])
     P_local = T + S * (R @ np.array([Xw, Yw, Zw]))
     
-    # Cartesian to Geodetic (Everest 1830)
-    a_e, f_e = 6377298.556, 1/300.8017
-    e2_e = (2*f_e) - (f_e**2)
+    # GDM2000 Uses GRS80 Ellipsoid
+    a_g, f_g = 6378137.0, 1/298.257222101
+    e2_g = (2*f_g) - (f_g**2)
     x, y, z = P_local
+    
+    # Convert Local Cartesian back to Geodetic
     lon_l = np.arctan2(y, x)
     p = np.sqrt(x**2 + y**2)
-    phi_l = np.arctan2(z, p * (1 - e2_e))
+    phi_l = np.arctan2(z, p * (1 - e2_g))
     for _ in range(5):
-        N_e = a_e / np.sqrt(1 - e2_e * np.sin(phi_l)**2)
-        phi_l = np.arctan2(z + e2_e * N_e * np.sin(phi_l), p)
+        N_g = a_g / np.sqrt(1 - e2_g * np.sin(phi_l)**2)
+        phi_l = np.arctan2(z + e2_g * N_g * np.sin(phi_l), p)
     
-    return np.degrees(phi_l), np.degrees(lon_l)
+    return np.degrees(phi_l), np.degrees(lon_l), P_local
 
 # 5. INITIALIZE SESSION STATE
 if 'results' not in st.session_state:
@@ -88,17 +81,18 @@ if 'balloons_fired' not in st.session_state:
 # 6. SIDEBAR
 if os.path.exists("utm.png"):
     st.sidebar.image("utm.png", use_container_width=True)
-dx = st.sidebar.number_input("dX (m)", value=596.096, format="%.3f")
-dy = st.sidebar.number_input("dY (m)", value=-624.512, format="%.3f")
-dz = st.sidebar.number_input("dZ (m)", value=2.779, format="%.3f")
-rx_s = st.sidebar.number_input("rX (sec)", value=-1.446460, format="%.6f")
-ry_s = st.sidebar.number_input("rY (sec)", value=-0.883120, format="%.6f")
-rz_s = st.sidebar.number_input("rZ (sec)", value=1.828440, format="%.6f")
-scale_p = st.sidebar.number_input("Scale (ppm)", value=-10.454, format="%.6f")
+st.sidebar.title("⚙️ Parameters")
+dx = st.sidebar.number_input("dX (m)", value=0.000, format="%.3f")
+dy = st.sidebar.number_input("dY (m)", value=0.000, format="%.3f")
+dz = st.sidebar.number_input("dZ (m)", value=0.000, format="%.3f")
+rx_s = st.sidebar.number_input("rX (sec)", value=0.000, format="%.6f")
+ry_s = st.sidebar.number_input("rY (sec)", value=0.000, format="%.6f")
+rz_s = st.sidebar.number_input("rZ (sec)", value=0.000, format="%.6f")
+scale_p = st.sidebar.number_input("Scale (ppm)", value=0.000, format="%.6f")
 
 # 7. MAIN UI
 st.title("🛰️ Coordinate Transformation Module")
-st.write("7-Parameter | DMS Output | Height Maintained")
+st.write("WGS84 ➔ GDM2000 | Dual Output Format")
 
 col_in, col_out = st.columns(2)
 with col_in:
@@ -109,10 +103,11 @@ with col_in:
     
     if st.button("🚀 Transform Point"):
         st.session_state.balloons_fired = False 
-        lat_t, lon_t = helmert_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
+        lat_t, lon_t, P_cart = helmert_transformation(lat_in, lon_in, h_in, dx, dy, dz, rx_s, ry_s, rz_s, scale_p)
         st.session_state.results = {
             "lat_dms": decimal_to_dms(lat_t, True),
             "lon_dms": decimal_to_dms(lon_t, False),
+            "cart": P_cart,
             "h_t": h_in,
             "lat_orig": lat_in,
             "lon_orig": lon_in
@@ -120,25 +115,32 @@ with col_in:
 
 with col_out:
     if st.session_state.results:
-        st.subheader("📤 Output: Timbalai 1948")
+        st.subheader("📤 Output: GDM2000")
         
-        # High-Readability Cards
+        # Geodetic DMS Card
         st.markdown(f"""
             <div class="result-card">
-                <div class="result-label">TRANSFORMED LATITUDE</div>
-                <div class="result-value">{st.session_state.results['lat_dms']}</div>
-            </div>
-            <div class="result-card">
-                <div class="result-label">TRANSFORMED LONGITUDE</div>
-                <div class="result-value">{st.session_state.results['lon_dms']}</div>
+                <div class="result-label">GEODETIC (DMS)</div>
+                <div class="result-value">LAT: {st.session_state.results['lat_dms']}<br>LON: {st.session_state.results['lon_dms']}</div>
             </div>
         """, unsafe_allow_html=True)
         
-        st.metric("Height (m)", f"{st.session_state.results['h_t']:.3f} (Preserved)")
+        # Cartesian Card
+        st.markdown(f"""
+            <div class="result-card">
+                <div class="result-label">CARTESIAN (X, Y, Z)</div>
+                <div class="result-value">
+                    X: {st.session_state.results['cart'][0]:.3f} m<br>
+                    Y: {st.session_state.results['cart'][1]:.3f} m<br>
+                    Z: {st.session_state.results['cart'][2]:.3f} m
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.metric("Ellipsoidal Height (m)", f"{st.session_state.results['h_t']:.3f}")
         
         if not st.session_state.balloons_fired:
-            st.balloons()
-            st.session_state.balloons_fired = True
+            st.balloons(); st.session_state.balloons_fired = True
 
 # 8. MAP ROW
 if st.session_state.results:
@@ -148,12 +150,5 @@ if st.session_state.results:
     folium.Marker([st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], popup="Survey Point").add_to(m)
     st_folium(m, use_container_width=True, height=400)
 
-# 9. MATHEMATICAL PRINCIPLES
-st.divider()
-with st.expander("📖 View Mathematical Model"):
-    
-    st.latex(r"\mathbf{X}_{Local} = \mathbf{T} + (1+S) \mathbf{R} \mathbf{X}_{WGS84}")
-
-# 10. FOOTER
+# 9. FOOTER
 st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
-
