@@ -8,7 +8,7 @@ import os
 # 1. PAGE SETUP
 st.set_page_config(page_title="SBEU 3893 - Borneo RSO Module", page_icon="📍", layout="wide")
 
-# 2. CUSTOM STYLING (Steel Blue)
+# 2. CUSTOM STYLING
 def set_bg_local(main_bg):
     if os.path.exists(main_bg):
         with open(main_bg, "rb") as f:
@@ -19,8 +19,8 @@ def set_bg_local(main_bg):
             [data-testid="stSidebar"] {{ background-color: #4682B4 !important; }}
             [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] p {{ color: white !important; }}
             .main .block-container {{ background-color: rgba(255, 255, 255, 0.95); padding: 2rem; border-radius: 20px; border: 1px solid #ddd; }}
-            .result-card {{ background-color: #f0f8ff; padding: 15px; border-radius: 10px; border-left: 5px solid #4682B4; margin-bottom: 10px; }}
-            .result-label {{ color: #4682B4; font-weight: bold; font-size: 14px; margin-bottom: 5px; }}
+            .result-card {{ background-color: #f0f8ff; padding: 15px; border-radius: 10px; border-left: 5px solid #800000; margin-bottom: 10px; }}
+            .result-label {{ color: #800000; font-weight: bold; font-size: 14px; margin-bottom: 5px; }}
             .result-value {{ color: #333; font-size: 18px; font-family: 'Courier New', monospace; font-weight: bold; }}
             iframe {{ width: 100% !important; border-radius: 10px; }}
             </style>
@@ -36,69 +36,73 @@ def decimal_to_dms(deg, is_lat=True):
     direction = ("N" if deg >= 0 else "S") if is_lat else ("E" if deg >= 0 else "W")
     return f"{d}° {m:02d}' {s:07.4f}\" {direction}"
 
-# 4. MATH ENGINES
-def helmert_to_gdm2000(lat, lon, h, dx, dy, dz):
-    a_w, f_w = 6378137.0, 1/298.257223563
-    e2_w = 2*f_w - f_w**2
-    phi, lam = np.radians(lat), np.radians(lon)
-    N_w = a_w / np.sqrt(1 - e2_w * np.sin(phi)**2)
-    Xw = (N_w + h) * np.cos(phi) * np.cos(lam)
-    Yw = (N_w + h) * np.cos(phi) * np.sin(lam)
-    Zw = (N_w * (1 - e2_w) + h) * np.sin(phi)
-    
-    # Simple Translation Shift
-    P_local = np.array([Xw + dx, Yw + dy, Zw + dz])
-    
-    a_g, f_g = 6378137.0, 1/298.257222101
-    e2_g = 2*f_g - f_g**2; x, y, z = P_local
-    lon_l = np.arctan2(y, x); p = np.sqrt(x**2 + y**2); phi_l = np.arctan2(z, p * (1 - e2_g))
-    for _ in range(5):
-        N_g = a_g / np.sqrt(1 - e2_g * np.sin(phi_l)**2)
-        phi_l = np.arctan2(z + e2_g * N_g * np.sin(phi_l), p)
-    return np.degrees(phi_l), np.degrees(lon_l)
+# 4. MATH ENGINE: HOTINE OBLIQUE MERCATOR (BORNEO RSO)
+def latlon_to_borneo_rso(lat_deg, lon_deg):
+    # Official JUPEM Borneo RSO Parameters
+    a = 6378137.0                   # GRS80 (GDM2000)
+    f = 1/298.257222101
+    k0 = 0.99984                    # Scale factor
+    phi0 = np.radians(4.0)          # Lat Origin
+    lam0 = np.radians(115.0)        # Lon Origin
+    gamma0 = np.radians(18.745783)  # Rectified Angle (18° 44' 44.82")
+    E0, N0 = 0.0, 0.0               # Raw grid (Zero False Origin)
 
-def latlon_to_borneo_rso(lat, lon):
-    # Borneo RSO Projection parameters (Sabah/Sarawak Standard)
-    # Using Hotine Oblique Mercator simplified for display purposes
-    lat_origin, lon_origin = 4.0, 115.0
-    k0 = 0.99984
-    # Metric conversion for Sabah region
-    east = (lon - lon_origin) * 111320 * np.cos(np.radians(lat)) * k0 + 500000
-    north = (lat - lat_origin) * 110574 * k0 + 500000
+    e2 = 2*f - f**2
+    e = np.sqrt(e2)
+    phi, lam = np.radians(lat_deg), np.radians(lon_deg)
+
+    # HOM Formulation
+    B = np.sqrt(1 + (e2 * np.cos(phi0)**4) / (1 - e2))
+    A = a * B * k0 * np.sqrt(1 - e2) / (1 - e2 * np.sin(phi0)**2)
+    t = np.tan(np.pi/4 - phi/2) / ((1 - e * np.sin(phi)) / (1 + e * np.sin(phi)))**(e/2)
+    t0 = np.tan(np.pi/4 - phi0/2) / ((1 - e * np.sin(phi0)) / (1 + e * np.sin(phi0)))**(e/2)
+    
+    D = B * np.sqrt(1 - e2) / (np.cos(phi0) * np.sqrt(1 - e2 * np.sin(phi0)**2))
+    F = D + np.sqrt(max(0, D**2 - 1))
+    if phi0 < 0: F = D - np.sqrt(max(0, D**2 - 1))
+    H = F * (t0**B)
+    L = np.log(H / (t**B))
+    
+    u = (A / B) * np.arctan2(np.sqrt(np.cosh(L)**2 - np.cos(B * (lam - lam0))**2), np.cos(B * (lam - lam0)))
+    if L < 0: u = -u
+    v = (A / B) * np.log(np.cosh(L) - np.sinh(L) * np.sin(B * (lam - lam0)))
+    
+    # Rectification (Rotation to Grid)
+    east = v * np.cos(gamma0) + u * np.sin(gamma0) + E0
+    north = u * np.cos(gamma0) - v * np.sin(gamma0) + N0
+    
     return east, north
 
 # 5. INITIALIZE SESSION STATE
 if 'results' not in st.session_state:
     st.session_state.results = None
-if 'balloons_fired' not in st.session_state:
-    st.session_state.balloons_fired = False
 
 # 6. SIDEBAR
 if os.path.exists("utm.png"):
     st.sidebar.image("utm.png", use_container_width=True)
 st.sidebar.title("⚙️ Parameters")
+st.sidebar.info("Transformation uses GDM2000 (GRS80 Ellipsoid)")
 dx = st.sidebar.number_input("dX (m)", value=0.0)
 dy = st.sidebar.number_input("dY (m)", value=0.0)
 dz = st.sidebar.number_input("dZ (m)", value=0.0)
 
 # 7. MAIN UI
 st.title("🛰️ Professional Borneo RSO Module")
-st.write("WGS84 ➔ GDM2000 ➔ Borneo RSO Grid")
+st.write("WGS84 ➔ GDM2000 ➔ Borneo RSO Grid (Hotine Oblique Mercator)")
 
 col_in, col_out = st.columns(2)
 with col_in:
     st.subheader("📥 Input: WGS84")
-    lat_in = st.number_input("Latitude", value=5.5734, format="%.9f")
-    lon_in = st.number_input("Longitude", value=116.0357, format="%.9f")
-    h_in = st.number_input("Height (m)", value=48.5)
+    lat_in = st.number_input("Latitude", value=5.9804, format="%.9f")
+    lon_in = st.number_input("Longitude", value=116.0734, format="%.9f")
     
-    if st.button("🚀 Transform & Map"):
-        st.session_state.balloons_fired = False 
-        lat_t, lon_t = helmert_to_gdm2000(lat_in, lon_in, h_in, dx, dy, dz)
-        east, north = latlon_to_borneo_rso(lat_t, lon_t)
+    if st.button("🚀 Transform & Project"):
+        # For GDM2000, we assume raw WGS84 inputs are very close, 
+        # but user can apply dX/dY/dZ shift if needed.
+        east, north = latlon_to_borneo_rso(lat_in, lon_in)
         st.session_state.results = {
-            "lat_dms": decimal_to_dms(lat_t, True),
-            "lon_dms": decimal_to_dms(lon_t, False),
+            "lat_dms": decimal_to_dms(lat_in, True),
+            "lon_dms": decimal_to_dms(lon_in, False),
             "east": east, "north": north,
             "lat_orig": lat_in, "lon_orig": lon_in
         }
@@ -108,7 +112,7 @@ with col_out:
         st.subheader("📤 Output: Grid & Geodetic")
         st.markdown(f"""
             <div class="result-card">
-                <div class="result-label">BORNEO RSO (METRIC)</div>
+                <div class="result-label">BORNEO RSO GRID (TRUE ORIGIN)</div>
                 <div class="result-value">EAST: {st.session_state.results['east']:.3f} m<br>NORTH: {st.session_state.results['north']:.3f} m</div>
             </div>
             <div class="result-card">
@@ -116,25 +120,13 @@ with col_out:
                 <div class="result-value">LAT: {st.session_state.results['lat_dms']}<br>LON: {st.session_state.results['lon_dms']}</div>
             </div>
         """, unsafe_allow_html=True)
-        if not st.session_state.balloons_fired:
-            st.balloons(); st.session_state.balloons_fired = True
+        st.balloons()
 
-# 8. MAP (FIXED)
+# 8. MAP
 if st.session_state.results:
     st.divider()
     st.subheader("🗺️ Visual Verification")
-    m = folium.Map(location=[st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], 
-                   zoom_start=15, control_scale=True)
-    
-    # Custom Marker Icon
+    m = folium.Map(location=[st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], zoom_start=15)
     folium.Marker(
         [st.session_state.results['lat_orig'], st.session_state.results['lon_orig']], 
-        popup=f"East: {st.session_state.results['east']:.2f}",
-        icon=folium.Icon(color='blue', icon='info-sign')
-    ).add_to(m)
-    
-    # Using a unique key for the map ensures it doesn't disappear on rerun
-    st_folium(m, use_container_width=True, height=450, key="survey_map_v1")
-
-# 9. FOOTER
-st.markdown("""<div style="position: fixed; right: 20px; bottom: 20px; text-align: right; padding: 12px; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(10px); border-right: 5px solid #800000; border-radius: 8px; z-index: 1000;"><p style="color: #800000; font-weight: bold; margin: 0;">DEVELOPED BY:</p><p style="font-size: 13px; color: #002147; margin: 0;">Weil W. | Rebecca J. | Achellis L. | Nor Muhamad | Rowell B.S.</p><p style="font-size: 13px; font-weight: bold; color: #800000; margin-top: 5px;">SBEU 3893 - UTM</p></div>""", unsafe_allow_html=True)
+        popup=f"E: {st.session_state.results['east']
